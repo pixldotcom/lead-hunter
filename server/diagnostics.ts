@@ -1,3 +1,4 @@
+import {SupabaseConfigError} from './supabaseConfig.ts';
 // Deliberately omit error messages, source excerpts, URLs and request data.
 // Keep only stack locations: messages and even function names can contain input.
 export function logServerError(category:'MODULE_INIT'|'AUTH_CONFIG'|'REQUEST_FAILED',error:unknown){
@@ -10,5 +11,6 @@ export function logServerError(category:'MODULE_INIT'|'AUTH_CONFIG'|'REQUEST_FAI
   if(!location||!/(?:\.[cm]?[jt]s|node:[\w/]+)$/.test(location[1]))return [];
   return [`    at ${location[1]}:${location[2]}:${location[3]}`];
  }).slice(0,20):[];
- console.error('[server]',JSON.stringify({category,kind,code,stack:[kind,...frames].join('\n')}));
+ const configIssues=category==='AUTH_CONFIG'&&error instanceof SupabaseConfigError?error.issues:undefined;
+ console.error('[server]',JSON.stringify({category,kind,code,configIssues,stack:[kind,...frames].join('\n')}));
 }

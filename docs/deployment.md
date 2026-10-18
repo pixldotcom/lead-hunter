@@ -1,4 +1,4 @@
-# Lead Hunter cloud deployment — Supabase + Vercel
+# Lead Hunter cloud deployment ï¿½ Supabase + Vercel
 
 Prepared locally on 17 October 2026. No hosted project, account, SQL migration, Git commit/push or Vercel deployment has been created or modified. Perform remote steps only after release approval. This guide supersedes earlier fixed-password/local-storage deployment instructions.
 
@@ -13,6 +13,8 @@ In **Vercel > Project > Settings > Environment Variables**, set these for **Prod
 | `SUPABASE_URL` | Dedicated production project's HTTPS API URL, e.g. `https://PROJECT_REF.supabase.co` |
 | `SUPABASE_PUBLISHABLE_KEY` | That project's `sb_publishable_...` key (a legacy anon key is also accepted); never service_role or sb_secret |
 | `APP_ORIGIN` | Exact canonical HTTPS application origin, e.g. `https://lead-hunter-yourname.vercel.app`, without a trailing slash |
+| `OWNER_USER_ID` | Manually created owner UUID; must match the private database owner registry |
+| `OWNER_EMAIL` | That owner account's email; restricts unauthenticated recovery requests |
 
 Use the **Connect/API Keys** areas of your Supabase project dashboard to obtain the URL and publishable key. Although publishable keys are designed to be public, this application keeps this configuration server-side. Authentication does not rely on the publishable key as a password: Supabase verifies the user's JWT and database policies enforce ownership.
 
@@ -20,7 +22,7 @@ Remove obsolete `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_SESSION_SECRET`, `AUTH_S
 
 Production endpoints: `/api/auth/login`, `/api/auth/logout`, `/api/auth/session`, `/api/auth/recover`, `/api/auth/recovery`, `/api/auth/password`, `/api/workspace`, `/api/workspace/backup`, `/api/audit`, `/api/health`. There is no signup or automatic-search endpoint. GET session returns only account metadata, not tokens. The analyzer keeps DNS pinning, public-address/redirect checks, 1 MB response limits and cancellation; its application deadline is 35 seconds and configured function duration is 60 seconds. Vercel's static frontend and these functions share an origin; no permissive CORS or production proxy is needed.
 
-## Supabase production setup — after approval
+## Supabase production setup ï¿½ after approval
 
 1. Create a **new dedicated Supabase project** in your chosen organization and region, with a strong database administrator password stored privately. Do not reuse a project containing other application records.
 2. In **Authentication**, enable email/password login. In the signup/general configuration, **disable Allow new users to sign up**, and disable anonymous sign-in. Do not disable the email login provider itself. There is no registration UI/API in Lead Hunter, but disabling provider signup is also required to prevent direct provider registration.
@@ -46,7 +48,7 @@ Configure Site URL without an extra trailing slash. The app removes the token fr
 
 Acceptance check: request a reset from the app, receive the message, open it in a fresh browser, update the password, confirm the old password fails and the new password logs in, and verify saved records still belong to that user. Provider email delivery is a real external check; local controlled Auth fixtures do not prove SMTP works.
 
-## GitHub and Vercel — after approval
+## GitHub and Vercel ï¿½ after approval
 
 1. Create an empty **private** GitHub repository. The local repository still has an uncommitted baseline and no configured remote. Review `git status --short --untracked-files=all`; real `.env` files, exports, device recovery files, dependencies and build output are ignored.
 2. After approval, stage the explicit source allowlist, review the entire staged diff, then commit/push:

@@ -7,7 +7,7 @@ import {makeLead} from '../src/domain';
 import {testCloudFixture} from '../scripts/testCloudFixture.mjs';
 let fixture:Awaited<ReturnType<typeof testCloudFixture>>,base:string,server:ReturnType<typeof createServer>;
 let cookies='';
-beforeAll(async()=>{fixture=await testCloudFixture();let handler:ReturnType<typeof createSupabaseHandler>;server=createServer((req,res)=>void handler(req,res));await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const address=server.address();if(!address||typeof address==='string')throw Error('No port');base=`http://127.0.0.1:${address.port}`;handler=createSupabaseHandler({origin:base,url:'https://fixture.supabase.co',key:'sb_publishable_fixture',secure:false},{client:fixture.client})},30000);
+beforeAll(async()=>{fixture=await testCloudFixture();let handler:ReturnType<typeof createSupabaseHandler>;server=createServer((req,res)=>void handler(req,res));await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const address=server.address();if(!address||typeof address==='string')throw Error('No port');base=`http://127.0.0.1:${address.port}`;handler=createSupabaseHandler({origin:base,url:'https://fixture.supabase.co',key:'sb_publishable_fixture',secure:false,ownerUserId:fixture.users[0].id,ownerEmail:fixture.users[0].email},{client:fixture.client})},30000);
 afterAll(async()=>{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));await fixture.close()});
 async function call(path:string,body?:unknown,auth=cookies){const r=await fetch(base+'/api/'+path,{method:body===undefined?'GET':'POST',headers:{origin:base,'content-type':'application/json',cookie:auth},body:body===undefined?undefined:JSON.stringify(body)});const set=r.headers.getSetCookie();if(set.length)cookies=set.map(c=>c.split(';')[0]).join('; ');return r}
 describe('Supabase auth adapter and authenticated cloud APIs',()=>{
@@ -26,16 +26,16 @@ describe('Supabase auth adapter and authenticated cloud APIs',()=>{
   expect((await call('audit',{url:'http://169.254.169.254'})).status).toBe(400);
  });
  it('isolates a second account and logs out without enabling unauthorized API reuse',async()=>{
-  const first=cookies;await call('auth/login',fixture.users[1]);expect((await (await call('workspace')).json()).data.leads.leads).toEqual([]);expect((await call('auth/logout',{})).status).toBe(200);cookies='';expect((await call('workspace')).status).toBe(401);cookies=first;expect((await call('workspace')).status).toBe(200);
+  const first=cookies;expect((await call('auth/login',fixture.users[1])).status).toBe(403);expect((await call('workspace')).status).toBe(401);expect((await call('auth/logout',{})).status).toBe(401);cookies='';expect((await call('workspace')).status).toBe(401);cookies=first;expect((await call('workspace')).status).toBe(200);
  });
  it('handles password recovery, rejects reused/invalid links and updates the authenticated password',async()=>{
-  const email=fixture.users[1].email;expect((await call('auth/recover',{email})).status).toBe(200);const tokenHash=fixture.recoveries.get(email);
+  const email=fixture.users[0].email;expect((await call('auth/recover',{email})).status).toBe(200);const tokenHash=fixture.recoveries.get(email);
   expect((await call('auth/recovery',{tokenHash:'0'.repeat(64)})).status).toBe(401);expect((await call('auth/recovery',{tokenHash})).status).toBe(200);expect((await call('auth/recovery',{tokenHash})).status).toBe(401);
   expect((await call('auth/password',{password:'short'})).status).toBe(400);expect((await call('auth/password',{password:'replacement-fixture-password'})).status).toBe(200);
  });
  it('rejects foreign origins, malformed data and invalid snapshots',async()=>{
   expect((await fetch(base+'/api/auth/login',{method:'POST',headers:{origin:'https://evil.example','content-type':'application/json'},body:'{}'})).status).toBe(403);
-  expect((await call('workspace',{userId:fixture.users[1].id,expectedRevision:0,operationId:crypto.randomUUID(),data:{version:9}})).status).toBe(400);expect((await call('workspace',{userId:fixture.users[0].id,expectedRevision:0,operationId:crypto.randomUUID(),data:emptyCloud()})).status).toBe(403);
+  expect((await call('workspace',{userId:fixture.users[0].id,expectedRevision:0,operationId:crypto.randomUUID(),data:{version:9}})).status).toBe(400);expect((await call('workspace',{userId:fixture.users[1].id,expectedRevision:0,operationId:crypto.randomUUID(),data:emptyCloud()})).status).toBe(403);
  });
  it('exports an original malformed cloud snapshot and restores validated data with revision protection',async()=>{
   await call('auth/login',fixture.users[0]);const before=await (await call('workspace')).json();await fixture.corrupt(fixture.users[0].id);expect((await call('workspace')).status).toBe(503);const original=await call('workspace/backup');expect(original.status).toBe(200);const snapshot=await original.json();expect(snapshot.data.leads.leads[0].name).toBe(5);

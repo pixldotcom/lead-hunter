@@ -8,7 +8,7 @@ afterEach(()=>vi.unstubAllEnvs());
 it('runs the actual Vercel entry points with parsed bodies and enforces HTTPS-origin authentication',async()=>{
  // @ts-expect-error Executable test fixture module.
  const {testCloudFixture}=await import('../scripts/testCloudFixture.mjs');const fixture=await testCloudFixture();factory.client=fixture.client;
- vi.stubEnv('SUPABASE_URL','https://fixture.supabase.co');vi.stubEnv('SUPABASE_PUBLISHABLE_KEY','sb_publishable_fixture');vi.stubEnv('APP_ORIGIN','https://leads.example.com');vi.stubEnv('VERCEL','1');
+ vi.stubEnv('OWNER_USER_ID',fixture.users[0].id);vi.stubEnv('OWNER_EMAIL',fixture.users[0].email);vi.stubEnv('SUPABASE_URL','https://fixture.supabase.co');vi.stubEnv('SUPABASE_PUBLISHABLE_KEY','sb_publishable_fixture');vi.stubEnv('APP_ORIGIN','https://leads.example.com');vi.stubEnv('VERCEL','1');
  const routes:Record<string,(req:IncomingMessage & {body?:unknown},res:ServerResponse)=>Promise<void>>={
   '/api/auth/login':(await import('../api/auth/login')).default,
   '/api/auth/logout':(await import('../api/auth/logout')).default,

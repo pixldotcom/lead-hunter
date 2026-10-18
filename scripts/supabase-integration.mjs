@@ -16,17 +16,20 @@ async function sign(client,letter){const r=await client.auth.signInWithPassword(
 const userA=await sign(a,'A'),userB=await sign(b,'B');assert.notEqual(userA,userB);
 const anon=await anonymous.rpc('lh_load_workspace');assert.ok(anon.error,'Anonymous workspace access must fail.');
 async function load(client){const result=await client.rpc('lh_load_workspace');assert.equal(result.error,null);return result.data}
-const beforeA=await load(a),beforeB=await load(b);
-assert.equal(beforeA.revision,0,'Use empty disposable accounts; existing test data is never replaced.');assert.equal(beforeB.revision,0,'Use empty disposable accounts; existing test data is never replaced.');
+assert.equal((await a.rpc('lh_is_owner')).data,true,'Configure the test-only owner registry to user A.');
+assert.equal((await b.rpc('lh_is_owner')).data,false);
+assert.equal((await b.rpc('lh_load_workspace')).error?.code,'42501','Non-owner direct RPC must fail.');
+const beforeA=await load(a);
+assert.equal(beforeA.revision,0,'Use empty disposable accounts; existing test data is never replaced.');
 const payload=emptyCloud(),lead=makeLead({name:'Supabase isolation fixture',website:'supabase-fixture.example'});payload.leads.leads=[lead];
 const args={p_expected_revision:0,p_operation_id:randomUUID(),p_payload:payload,p_import_hash:null,p_payload_hash:createHash('sha256').update(JSON.stringify(payload)).digest('hex')};
 const saved=await a.rpc('lh_save_workspace',args);assert.equal(saved.error,null);assert.equal(saved.data.revision,1);
 assert.equal((await a.rpc('lh_save_workspace',args)).data.revision,1,'Lost-response retry must be idempotent.');
 assert.equal((await a.rpc('lh_save_workspace',{...args,p_operation_id:randomUUID()})).error?.code,'40001');
-assert.equal((await load(b)).data.leads.leads.length,0);
+assert.equal((await b.rpc('lh_save_workspace',args)).error?.code,'42501');
 for(const table of ['lh_workspaces','lh_leads','lh_activities','lh_batches','lh_prospects','lh_drafts','lh_preferences','lh_operations','lh_imports','lh_backups']){const result=await b.from(table).select('*').eq('user_id',userA);assert.equal(result.error,null);assert.deepEqual(result.data,[])}
 assert.ok((await b.from('lh_leads').insert({user_id:userA,id:'forbidden',domain:'forbidden.example',payload:{}})).error,'Cross-user direct writes must fail.');
 const another=createClient(url,key,opts);await sign(another,'A');assert.equal((await load(another)).data.leads.leads[0].id,lead.id);
 const {error}=await another.auth.signOut({scope:'local'});assert.equal(error,null);assert.ok((await another.rpc('lh_load_workspace')).error,'Logged-out requests must be denied.');
 await a.auth.signOut({scope:'local'});await b.auth.signOut({scope:'local'});
-console.log('PASS: hosted Supabase login, signup disabled, anonymous rejection, transactional persistence/idempotency/conflict, same-account fresh session, all-table cross-user RLS, forbidden write and logout. Synthetic fixture remains in disposable user A; delete the two test accounts through the test project dashboard to clean up. SMTP/recovery delivery requires the separate manual email acceptance check.');
+console.log('PASS: hosted Supabase login, signup disabled, anonymous rejection, transactional persistence/idempotency/conflict, same-account fresh session, single-owner RPC authorization and all-table cross-user RLS, forbidden write and logout. Synthetic fixture remains in disposable user A; delete the two test accounts through the test project dashboard to clean up. SMTP/recovery delivery requires the separate manual email acceptance check.');

@@ -5,6 +5,7 @@ import {createServer} from 'node:http';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 const output=process.argv[2];assert(output,'Supply the materialized Vercel function directory.');
+process.env.OWNER_USER_ID='11111111-1111-4111-8111-111111111111';process.env.OWNER_EMAIL='one@fixture.example';
 process.env.NODE_ENV='production';process.env.VERCEL='1';
 process.env.SUPABASE_URL='https://fixture.supabase.co';
 process.env.SUPABASE_PUBLISHABLE_KEY='sb_publishable_fixture';
