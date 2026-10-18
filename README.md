@@ -1,6 +1,6 @@
 # PixlDot Lead Hunter
 
-Private cloud workspace for finding, reviewing and managing website prospects. React/Vite frontend + Node.js 24 backend, prepared for Vercel and Supabase Auth/PostgreSQL.
+Private cloud workspace for finding, reviewing and managing website prospects. React/Vite frontend + Node.js 24 backend, prepared for Vercel and Supabase Auth/PostgreSQL. **No cloud project, migration, commit, push or deployment has been performed.**
 
 Start with [deployment/setup instructions](docs/deployment.md), [database schema/RLS](docs/supabase-schema.md) and the [cloud integration report](docs/supabase-report.md). These supersede previous local-only/fixed-password phase reports.
 

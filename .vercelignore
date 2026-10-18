@@ -2,6 +2,8 @@
 .env
 .env.*
 .vercel
+.npm-cache
+.clean-install-*
 backups
 data
 exports

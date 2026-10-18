@@ -4,6 +4,7 @@ import type {IncomingMessage,ServerResponse} from 'node:http';
 import {analyze} from './audit.ts';
 import {AuditError} from './network.ts';
 import {emptyCloud,validateCloud} from '../src/cloudModel.ts';
+import {logServerError} from './diagnostics.ts';
 
 export type SupabaseConfig={url:string;key:string;origin:string;secure:boolean};
 export function supabaseConfig(env:NodeJS.ProcessEnv=process.env):SupabaseConfig{
@@ -89,6 +90,6 @@ export function createSupabaseHandler(config?:SupabaseConfig,deps:Deps={}){
     const result=response.data??{revision:0,data:emptyCloud()};return reply(200,{userId:user.id,revision:result.revision,data:validateCloud(result.data)});
    }
    return reply(404,{error:'Route not found.'});
-  }catch(error){if(error instanceof AuditError)return reply(error.code==='TIMEOUT'?504:400,{code:error.code,error:error.message});console.warn('[api]',JSON.stringify({path,code:'REQUEST_FAILED'}));return reply(503,{error:'The service is unavailable. Unsaved work can be retried.'})}finally{clearTimeout(timer)}
+  }catch(error){if(error instanceof AuditError)return reply(error.code==='TIMEOUT'?504:400,{code:error.code,error:error.message});logServerError('REQUEST_FAILED',error);return reply(503,{error:'The service is unavailable. Unsaved work can be retried.'})}finally{clearTimeout(timer)}
  };
 }
