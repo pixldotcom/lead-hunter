@@ -72,6 +72,14 @@ Supabase manages sessions. The server verifies access tokens with `auth.getUser`
 
 ## Vercel settings and environment scopes
 
+### Private subdomain and search indexing
+
+For `leads.pixldot.com`, add that domain to the existing Vercel project's Domains settings and configure the exact DNS record Vercel displays at your DNS provider. After domain verification/TLS, use `APP_ORIGIN=https://leads.pixldot.com` in Production and update Supabase's Site URL and exact recovery redirect to `https://leads.pixldot.com/?recovery=1`. Redeploy after changing environment settings. Local APP_ORIGIN stays `http://127.0.0.1:5173`.
+
+The HTML includes a robots `noindex, nofollow, noarchive` meta tag, and Vercel adds the same X-Robots-Tag to all project paths, including APIs and assets, on the custom and Vercel domains. These controls take effect online only after deploying the updated source. Do not add a robots.txt `Disallow: /`: crawlers must be able to retrieve the public login page to observe noindex. Protected data remains behind owner authentication and RLS. Noindex requests exclusion by compliant search engines; it is not an access restriction or an absolute guarantee against discovery. Do not submit this subdomain in a sitemap. If already indexed, use Google Search Console Removals for temporary hiding while Google processes the permanent noindex rule. See [Google's noindex guidance](https://developers.google.com/search/docs/crawling-indexing/block-indexing).
+
+After an approved deployment, verify `curl.exe -I https://leads.pixldot.com/` contains `X-Robots-Tag: noindex, nofollow, noarchive`, and the HTML source contains the robots meta tag. No domain, DNS, or production configuration was changed by the local source edit.
+
 Use the existing React/Vite frontend and Node/TypeScript backend. Select the repository root, framework **Vite**, Node **24.x**, install `npm ci`, build `npm run build`, output `dist`. `api/**/*.ts` creates separate Node Functions with a 60-second duration. `dist` alone is not a deployable API. The TypeScript relative-import rewriting fix remains enabled so emitted `.js` entries import packaged `.js` dependencies. Security headers and no-store API responses remain configured in `vercel.json`.
 
 | Variable | Production scope | Local development | Preview scope |
