@@ -1,0 +1,27 @@
+.git
+.env
+.env.*
+.vercel
+backups
+data
+exports
+prospects
+customers
+browser-profile*
+*.log
+*.har
+*.csv
+*.bak
+*.backup
+
+# Private exports and device recovery copies
+pixldot-cloud-*.json
+pixldot-local-*.json
+pixldot-import-*.json
+pixldot-leads-*.json
+pixldot-drafts-*.json
+pixldot-discovery-*.json
+pixldot-discovery-*.txt
+pixldot-outreach*.txt
+pixldot-proposal-concept*.html
+*recovery*.txt

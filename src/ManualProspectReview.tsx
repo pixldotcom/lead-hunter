@@ -1,0 +1,20 @@
+import {useState} from 'react';
+import {type Candidate,decisionCandidate} from './discovery';
+import {REVIEW_AREAS,CHECK_STATES,emptyManualReview,newFinding,validateManualReview,type ManualFinding} from './manualReview';
+import {AuditTools} from './AuditTools';
+export function ManualProspectReview({candidate:c,onChange,onError}:{candidate:Candidate;onChange:(c:Candidate)=>void;onError:(s:string)=>void}){
+ const [review,R]=useState(c.manualReview??emptyManualReview()),[title,T]=useState(''),[severity,S]=useState<ManualFinding['severity']>('medium'),[evidence,E]=useState('');
+ const save=(decision?:Candidate['decision'])=>{try{const manualReview=validateManualReview({...review,reviewedAt:new Date().toISOString()});onChange({...decisionCandidate(c,decision??c.decision),manualReview})}catch(e){onError(e instanceof Error?e.message:'Could not save manual review.')}};
+ return <section className="prospect-review"><h3>Manual website review</h3><a href={c.website} target="_blank" rel="noopener noreferrer">Open Website ↗</a>
+ {c.searchEvidence&&<div className="search-evidence"><h4>Search evidence — not a website audit</h4><p>{c.searchEvidence.title}</p><p>{c.searchEvidence.snippet||'No snippet supplied.'}</p><small>Brave query: {c.searchEvidence.query} · {new Date(c.searchEvidence.discoveredAt).toLocaleString()}</small></div>}
+ <label>Review notes<textarea aria-label="Manual review notes" rows={3} value={review.notes} onChange={e=>R({...review,notes:e.target.value})}/></label>
+ <div className="manual-checklist">{REVIEW_AREAS.map(area=><label key={area}>{area}<select aria-label={`Review ${area}`} value={review.checklist[area]} onChange={e=>R({...review,checklist:{...review.checklist,[area]:e.target.value as typeof CHECK_STATES[number]}})}>{CHECK_STATES.map(v=><option key={v}>{v}</option>)}</select></label>)}</div>
+ <label className="deep-review-toggle"><input type="checkbox" checked={review.visualInspectionPerformed} onChange={e=>R({...review,visualInspectionPerformed:e.target.checked})}/> I personally viewed the website or a real screenshot.</label><p>Checklist choices and findings are human judgements. The app has not visually inspected this website. Leave unchecked items unverified.</p>
+ <details><summary>Add an individual human finding</summary><label>Finding title<input aria-label="Manual finding title" value={title} onChange={e=>T(e.target.value)}/></label><label>Severity<select aria-label="Manual finding severity" value={severity} onChange={e=>S(e.target.value as ManualFinding['severity'])}>{['info','low','medium','high'].map(v=><option key={v}>{v}</option>)}</select></label><label>Evidence / notes<textarea aria-label="Manual finding evidence" value={evidence} onChange={e=>E(e.target.value)}/></label><button className="secondary" onClick={()=>{try{R({...review,findings:[...review.findings,newFinding(title,severity,evidence)]});T('');E('')}catch(e){onError(e instanceof Error?e.message:'Invalid finding.')}}}>Add finding</button></details>
+ <ul>{review.findings.map(f=><li key={f.id}><b>{f.title}</b> · {f.severity}<p>{f.evidence}</p><button className="secondary" onClick={()=>R({...review,findings:review.findings.filter(x=>x.id!==f.id)})}>Remove finding</button></li>)}</ul>
+ <div className="headbuttons"><button className="secondary" onClick={()=>save()}>Save manual review</button><button className="primary" onClick={()=>save('High priority')}>Save & Worth Pursuing</button><button className="secondary" onClick={()=>save('Rejected')}>Save & Skip</button><button className="secondary" onClick={()=>save('Review later')}>Save & Review Later</button></div>
+ <p>Worth Pursuing records your judgement; it does not promote or qualify a sales lead. Existing sales qualification remains optional under advanced tools.</p>
+ {c.evidence&&<details><summary>Machine-derived evidence (existing quick scan)</summary><p>{c.evidence.summary}</p>{c.evidence.findings.map(f=><p key={f.id}>{f.title} — {f.confidence}: {f.evidence}</p>)}</details>}
+ <AuditTools website={c.website}/>
+ </section>;
+}

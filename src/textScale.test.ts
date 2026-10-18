@@ -1,0 +1,7 @@
+import {describe,it,expect} from 'vitest';
+import {applyTextScale,readTextScale,saveTextScale,TEXT_SCALE_KEY,TEXT_SCALES} from './textScale';
+describe('application text scale',()=>{
+ it('defaults to 175 and tolerates unavailable or invalid preferences without writing',()=>{for(const raw of [null,'bad','200','{}'])expect(readTextScale({getItem:()=>raw})).toBe(175);expect(readTextScale({getItem:()=>{throw Error('blocked')}})).toBe(175)});
+ it('persists each supported option using only its own key',()=>{const values=new Map([['pixldot-lead-hunter-v1','leads'],['pixldot-discovery-v1','discovery'],['pixldot-outreach-drafts-v1','drafts']]);const storage={getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value)}};for(const scale of TEXT_SCALES){saveTextScale(storage,scale);expect(readTextScale(storage)).toBe(scale)}expect([...values.keys()]).toHaveLength(4);expect(values.get('pixldot-lead-hunter-v1')).toBe('leads');expect(values.get('pixldot-discovery-v1')).toBe('discovery');expect(values.get('pixldot-outreach-drafts-v1')).toBe('drafts');expect(values.get(TEXT_SCALE_KEY)).toBe('175')});
+ it('applies the root CSS variable and reports persistence failures',()=>{let applied:unknown;applyTextScale({style:{setProperty:(key:string,value:string)=>{applied=[key,value]}}} as HTMLElement,175);expect(applied).toEqual(['--app-text-scale','1.75']);expect(()=>saveTextScale({setItem:()=>{throw Error('quota')}},125)).toThrow('quota')});
+});

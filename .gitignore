@@ -1,0 +1,59 @@
+node_modules/
+dist/
+.npm-cache/
+.clean-install-*/
+*.tsbuildinfo
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+!.env.test.example
+*.pem
+*.key
+*.pfx
+*.p12
+.aws/
+.codex/
+.agents/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+# Private records, exports, browser profiles and recovery files
+backups/
+data/
+exports/
+prospects/
+customers/
+browser-profile*/
+*recovery*.txt
+pixldot-leads-*.json
+pixldot-leads-*.csv
+pixldot-drafts-*.json
+pixldot-outreach*.txt
+*.tmp
+
+# Unstructured private exports and temporary captures
+*.csv
+*backup*.json
+*.bak
+*.backup
+*.sqlite
+*.db
+*.har
+*.zip
+
+# Private discovery exports and proposal concepts
+pixldot-discovery-*.json
+pixldot-discovery-*.txt
+pixldot-proposal-concept*.html
+
+# Local hosting metadata
+.vercel/
+
+# Full cloud/device recovery exports
+pixldot-cloud-*.json
+pixldot-local-*.json
+pixldot-import-*.json
+pixldot-drafts-recovered-*.json

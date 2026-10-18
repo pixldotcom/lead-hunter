@@ -1,0 +1,37 @@
+{
+  "name": "pixldot-lead-hunter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env server/dev.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "audit": "node --env-file-if-exists=.env server/start.ts",
+    "dev:web": "vite --host 127.0.0.1",
+    "test:analyzer": "vitest run server",
+    "test:cloud": "node scripts/cloud-browser.mjs",
+    "test:supabase": "node --env-file-if-exists=.env.test.local scripts/supabase-integration.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
