@@ -36,6 +36,10 @@ Within manual review, **Audit Tools** opens [PageSpeed Insights](https://pagespe
 
 Manual screenshots: use [Chrome Device Mode](https://developer.chrome.com/docs/devtools/device-mode/) to inspect a viewport and capture screenshots. [Lighthouse](https://developer.chrome.com/docs/lighthouse/overview/) and [DevTools accessibility tools](https://developer.chrome.com/docs/devtools/accessibility/reference/) support manual deeper review. Store screenshot URL/time/filename references in the app; image files are not uploaded in this phase. Redesign previews remain labeled concepts with placeholders; review before sharing.
 
+## Progressive Web App
+
+The production frontend includes an installable PWA manifest, branded SVG app icon and a small service worker. On a supported browser, use the browser menu or address-bar install icon and choose **Install app** / **Add to Home Screen**. The service worker keeps the application shell and static frontend assets available for an offline launch. It deliberately does **not** cache `/api/*`, authentication, cloud workspace responses or prospect data. Login and cloud records therefore still require an internet connection; this is offline shell support, not full offline editing or background synchronization. The service worker is registered only in production builds.
+
 ## Run locally / validate
 
 Requires Node.js **24.x**. Install with `npm.cmd ci`. For a real configured test project, copy `.env.example` to a private `.env.local` (or fill the prepared file), set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `APP_ORIGIN`, `OWNER_USER_ID`, `OWNER_EMAIL`, and run `npm.cmd run dev`. The default local origin is `http://127.0.0.1:5173`; use the exact printed host/port and restart after environment changes. Missing config fails closed. Production uses Vercel Functions, not this dev server/proxy.
