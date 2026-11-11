@@ -12,9 +12,9 @@
     "audit": "node --env-file-if-exists=.env --env-file-if-exists=.env.local server/start.ts",
     "dev:web": "vite --host 127.0.0.1",
     "test:analyzer": "vitest run server",
-    "test:cloud": "node scripts/cloud-browser.mjs",
-    "test:local-config": "node scripts/local-config-browser.mjs",
-    "test:supabase": "node --env-file-if-exists=.env.test.local scripts/supabase-integration.mjs"
+    "test:cloud": "node scripts/e2e/cloud-browser.mjs",
+    "test:local-config": "node scripts/e2e/local-config-browser.mjs",
+    "test:supabase": "node --env-file-if-exists=.env.test.local scripts/supabase/supabase-integration.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
