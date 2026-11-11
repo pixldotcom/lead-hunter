@@ -2,7 +2,7 @@ import {csvCell,parseCsv,uid} from './domain.ts';
 import {searchWebsite,validateSearchResults,type SearchResult} from './searchCatalogue.ts';
 import type {Candidate,CandidateInput} from './discovery.ts';
 
-export const REVIEW_AREAS=['Visual / design quality','Mobile usability','Clarity of services','Calls to action','Contact journey','Trust signals'] as const;
+export const REVIEW_AREAS=['Visual / design quality','Mobile usability','Mobile load score','HTTPS','Mobile layout','Copyright year','Contact / booking clarity','Last updated (Wayback)','Tech stack','Free note'] as const;
 export const CHECK_STATES=['Not checked','Looks good','Needs work','Not applicable'] as const;
 export type ManualFinding={id:string;title:string;severity:'info'|'low'|'medium'|'high';evidence:string};
 export type ManualReview={notes:string;checklist:Record<string,typeof CHECK_STATES[number]>;findings:ManualFinding[];visualInspectionPerformed:boolean;reviewedAt:string};
