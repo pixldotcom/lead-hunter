@@ -1,5 +1,5 @@
 // Curated research presets, not assertions that a business needs these services.
-export type Category={id:string;name:string;industry:string;keywords:string[];templates:string[];services:string[]};
+export type Category={id:string;name:string;industry:string;keywords:string[];templates:string[];services:string[];tags?:string[]};
 export const CATEGORIES:Category[]=[
  {
   "id": "dentists",
