@@ -25,3 +25,12 @@ function ImportPreview({incoming,existing,recovery,onClose,onImport}:{incoming:{
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><PrivateWorkspace><App/></PrivateWorkspace></React.StrictMode>);
 
+
+// Register the lightweight PWA shell only in production. API responses are never cached.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error) => {
+      console.warn('PWA offline shell could not be registered:', error);
+    });
+  }, { once: true });
+}
