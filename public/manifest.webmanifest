@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "PixlDot Lead Hunter",
+  "short_name": "Lead Hunter",
+  "description": "Private workspace for finding, reviewing and managing website prospects.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#f7f8fc",
+  "theme_color": "#3757F5",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
