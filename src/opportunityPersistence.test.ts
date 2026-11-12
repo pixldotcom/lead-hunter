@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDiscovery, validateDiscovery, type DiscoveryData } from './discovery';
-import { createBusinessRecord, parseBusinessCsv, sameBusiness } from './opportunityPersistence';
+import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
 
 describe('opportunity business persistence', () => {
+  it('imports structured research while keeping claims source-linked and hypotheses separate', () => {
+    const notes = parseImportedResearch(JSON.stringify({ summary: 'Summary', facts: [{ claim: 'Open weekends', sourceUrl: 'https://example.test/hours' }], hypotheses: ['Could improve mobile booking'], unknowns: ['Current conversion rate'], nextSteps: ['Verify hours'] }), new Date('2026-11-12T00:00:00.000Z'));
+    expect(notes.facts[0].sourceUrl).toBe('https://example.test/hours');
+    expect(notes.hypotheses).toEqual(['Could improve mobile booking']);
+    expect(notes.importedAt).toBe('2026-11-12T00:00:00.000Z');
+  });
+
+  it('rejects research claims without an HTTP source and oversized input', () => {
+    expect(() => parseImportedResearch(JSON.stringify({ summary: 'Summary', facts: [{ claim: 'Unverified', sourceUrl: '' }] }))).toThrow(/source URL/);
+    expect(() => parseImportedResearch('x'.repeat(20001))).toThrow(/20 KB/);
+  });
   it('accepts a business without a website', () => {
     const [row] = parseBusinessCsv('name,category,location,rating,reviewCount,websiteStatus\nExample Dental,Dentist,Ludhiana,4.7,180,no_website_found');
     const business = createBusinessRecord(row, new Date('2026-11-12T00:00:00.000Z'));
