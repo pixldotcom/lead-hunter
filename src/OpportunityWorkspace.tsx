@@ -42,6 +42,7 @@ export function OpportunityWorkspace() {
   const [notice, Notice] = useState('');
   const [error, ErrorMessage] = useState('');
   const file = useRef<HTMLInputElement>(null);
+  const cancelBatch = useRef(false);
   const working = useRef({ businesses, analyses });
   useEffect(() => { working.current = { businesses, analyses }; }, [data]);
 
@@ -157,13 +158,18 @@ export function OpportunityWorkspace() {
 
   const analyzeAll = async () => {
     if (busy || !businesses.length) return;
+    const batchSize = data.preferences.batchSize || 5;
+    const pendingBusinesses = businesses.filter(business => !analyses.some(item => item.businessId === business.id));
+    const targets = (pendingBusinesses.length ? pendingBusinesses : businesses).slice(0, batchSize);
+    cancelBatch.current = false;
     Busy(true); ErrorMessage('');
     let completed = 0;
-    for (const business of [...businesses]) {
-      try { await analyze(business); completed++; Notice(`Analyzed ${completed} of ${businesses.length} businesses.`); }
+    for (const business of targets) {
+      if (cancelBatch.current) break;
+      try { await analyze(business); completed++; Notice(`Analyzed ${completed} of ${targets.length} in this batch.`); }
       catch (e) { ErrorMessage(`${business.name}: ${e instanceof Error ? e.message : 'analysis failed'}`); break; }
     }
-    if (completed === businesses.length) Notice(`Finished analyzing ${completed} businesses. Review the ranked opportunities below.`);
+    Notice(cancelBatch.current ? `Stopped after ${completed} businesses. Saved analyses are retained; run the next batch when ready.` : `Batch complete: ${completed} businesses analyzed. Review the ranked opportunities below.`);
     Busy(false);
   };
 
@@ -204,7 +210,10 @@ export function OpportunityWorkspace() {
     try { await persist(updated, working.current.analyses.filter(item => item.businessId !== business.id)); Notice('Website status updated. Re-analyze to refresh the opportunity score.'); }
     catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not update website status.'); }
   };
-  const visible = businesses.filter(business => filter === 'all' || filter === 'no-site' && business.websiteStatus === 'no_website_found' || filter === 'outdated' && business.websiteStatus === 'outdated' || filter === 'unreviewed' && !analyses.some(a => a.businessId === business.id));
+  const visible = businesses.filter(business => filter === 'all' || filter === 'no-site' && business.websiteStatus === 'no_website_found' || filter === 'outdated' && business.websiteStatus === 'outdated' || filter === 'unreviewed' && !analyses.some(a => a.businessId === business.id)).sort((a, b) => {
+    const score = (analyses.find(item => item.businessId === b.id)?.totalScore ?? -1) - (analyses.find(item => item.businessId === a.id)?.totalScore ?? -1);
+    return score || (b.rating ?? -1) - (a.rating ?? -1) || (b.reviewCount ?? -1) - (a.reviewCount ?? -1) || a.name.localeCompare(b.name);
+  });
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
   return <div className="opportunity-workspace">
     <div className="pagehead"><div><i>OPPORTUNITY-FIRST DISCOVERY</i><h1>Business Opportunities</h1><p>Prioritize businesses with a strong reputation and a weak or missing website, then uncover SEO, local SEO, performance and marketing opportunities.</p></div></div>
@@ -229,7 +238,7 @@ export function OpportunityWorkspace() {
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
     </section>
     <section className="panel">
-      <div className="between"><div><h2>Opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed</p></div><button className="primary" disabled={busy || !businesses.length} onClick={() => void analyzeAll()}>{busy ? 'Analyzing…' : 'Analyze all businesses'}</button></div>
+      <div className="between"><div><h2>Opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed</p></div><button className="primary" disabled={!businesses.length} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze next batch (${Math.min(data.preferences.batchSize || 5, businesses.length)})`}</button></div>
       <div className="headbuttons"><label>Show<select value={filter} onChange={e => Filter(e.target.value)}><option value="all">All businesses</option><option value="no-site">No website found</option><option value="outdated">Outdated websites</option><option value="unreviewed">Not analyzed yet</option></select></label></div>
       {!visible.length && <p className="empty">No businesses in this view yet. Add a business manually or import a CSV. You can include businesses with no website.</p>}
       <div className="opportunity-list">{visible.map(business => {
