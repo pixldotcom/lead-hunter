@@ -4,7 +4,7 @@ import { uid } from './domain';
 import { requestAudit } from './analyzerApi';
 import { readEvidence } from './discovery';
 import { detectOpportunities, prioritizedOpportunities } from './opportunityDetection';
-import { createBusinessRecord, parseBusinessCsv, sameBusiness } from './opportunityPersistence';
+import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
 import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } from './opportunityModel';
 
 const statusLabels: Record<WebsiteStatus, string> = {
@@ -41,6 +41,8 @@ export function OpportunityWorkspace() {
   const [busy, Busy] = useState(false);
   const [notice, Notice] = useState('');
   const [error, ErrorMessage] = useState('');
+  const [researchBusinessId, ResearchBusiness] = useState('');
+  const [researchJson, ResearchJson] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
   const working = useRef({ businesses, analyses });
@@ -183,6 +185,16 @@ export function OpportunityWorkspace() {
     catch { ErrorMessage('Clipboard access was blocked. Open the analysis and copy the research prompt manually.'); }
   };
 
+  const saveResearch = async (businessId: string) => {
+    try {
+      const notes = parseImportedResearch(researchJson);
+      const next = working.current.analyses.map(item => item.businessId === businessId ? { ...item, researchNotes: notes } : item);
+      if (!next.some(item => item.businessId === businessId)) throw new Error('Analyze this business before importing research.');
+      await persist(working.current.businesses, next);
+      ResearchBusiness(''); ResearchJson(''); Notice('Research saved. Imported claims remain unverified until you check their sources.');
+    } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not save research.'); }
+  };
+
   const importExistingCandidates = async () => {
     if (!data.candidates.length) return;
     try {
@@ -253,7 +265,7 @@ export function OpportunityWorkspace() {
           <div className="between"><div><h3>{business.name}</h3><p>{[business.category, business.location].filter(Boolean).join(' · ') || 'Category/location not recorded'}</p></div><label className="opportunity-status-control"><span>Website status</span><select aria-label={`Website status for ${business.name}`} value={business.websiteStatus} onChange={e => void updateWebsiteStatus(business, e.target.value as WebsiteStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
           <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">{business.websiteUrl}</a> : 'No website URL recorded'}{business.rating !== null ? ` · ★ ${business.rating}` : ''}{business.reviewCount !== null ? ` · ${business.reviewCount} reviews` : ''}{business.sourceUrl ? <> · <a href={business.sourceUrl} target="_blank" rel="noopener noreferrer">Discovery source</a></> : ''}</p>
           <p>Discovery source: {business.discoverySource || 'Not recorded'}</p>
-          {analysis ? <><div className="opportunity-score"><strong>Opportunity score: {analysis.totalScore}/100</strong><span>Reputation: {analysis.reputationScore}/100 · Evidence confidence: {analysis.evidenceConfidence}%</span></div><ul className="opportunity-signals">{top.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority}</b> — {item.rationale}</li>)}</ul><details><summary>Evidence and research brief</summary><h4>All service areas</h4><ul className="opportunity-signals">{analysis.opportunities.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority} ({item.score}/100)</b> — {item.rationale}</li>)}</ul><p>{analysis.evidence.length ? `${analysis.evidence.length} evidence items collected.` : 'No technical evidence collected. This analysis is based on business information only.'}</p>{analysis.evidence.map(item => <p key={item.id}><b>[{item.confidence}] {item.signal}</b> — {item.description} {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}<textarea readOnly rows={12} value={analysis.researchPrompt}/><button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button></details></> : <p className="muted">Not analyzed yet. Website scans use the existing local analyzer; no paid API or AI service is called.</p>}
+          {analysis ? <><div className="opportunity-score"><strong>Opportunity score: {analysis.totalScore}/100</strong><span>Reputation: {analysis.reputationScore}/100 · Evidence confidence: {analysis.evidenceConfidence}%</span></div><ul className="opportunity-signals">{top.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority}</b> — {item.rationale}</li>)}</ul><details><summary>Evidence and research brief</summary><h4>All service areas</h4><ul className="opportunity-signals">{analysis.opportunities.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority} ({item.score}/100)</b> — {item.rationale}</li>)}</ul><p>{analysis.evidence.length ? `${analysis.evidence.length} evidence items collected.` : 'No technical evidence collected. This analysis is based on business information only.'}</p>{analysis.evidence.map(item => <p key={item.id}><b>[{item.confidence}] {item.signal}</b> — {item.description} {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}<textarea readOnly rows={12} value={analysis.researchPrompt}/><button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button><h4>Research findings</h4>{analysis.researchNotes ? <><p>{analysis.researchNotes.summary}</p><p className="muted">Imported {new Date(analysis.researchNotes.importedAt).toLocaleString()}; source claims are unverified.</p><ul>{analysis.researchNotes.facts.map((fact, i) => <li key={i}>{fact.claim} — <a href={fact.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a></li>)}</ul>{analysis.researchNotes.hypotheses.length > 0 && <p>Hypotheses: {analysis.researchNotes.hypotheses.join(' · ')}</p>}{analysis.researchNotes.unknowns.length > 0 && <p>Unknowns: {analysis.researchNotes.unknowns.join(' · ')}</p>}{analysis.researchNotes.nextSteps.length > 0 && <p>Next steps: {analysis.researchNotes.nextSteps.join(' · ')}</p>}</> : <p className="muted">No research findings imported.</p>}<button className="secondary" onClick={() => { ResearchBusiness(business.id); ResearchJson(''); }}>Paste research JSON</button>{researchBusinessId === business.id && <div><label>Research JSON<textarea rows={10} value={researchJson} onChange={e => ResearchJson(e.target.value)} placeholder={'{"summary":"...","facts":[{"claim":"...","sourceUrl":"https://..."}],"hypotheses":[],"unknowns":[],"nextSteps":[]}'}/></label><div className="headbuttons"><button className="primary" onClick={() => void saveResearch(business.id)}>Validate and save</button><button className="secondary" onClick={() => ResearchBusiness('')}>Cancel</button></div></div>}</details></> : <p className="muted">Not analyzed yet. Website scans use the existing local analyzer; no paid API or AI service is called.</p>}
           <div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Re-analyze' : 'Analyze opportunity'}</button></div>
         </article>;
       })}</div>

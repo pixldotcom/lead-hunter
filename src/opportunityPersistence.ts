@@ -32,6 +32,10 @@ function validateEvidence(value: unknown): OpportunityEvidence {
 export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis {
   if (!isObject(value) || !isText(value.businessId) || !websiteStatuses.includes(value.websiteStatus as WebsiteStatus) || !Array.isArray(value.opportunities) || !Array.isArray(value.evidence) || typeof value.totalScore !== 'number' || !Number.isFinite(value.totalScore) || value.totalScore < 0 || value.totalScore > 100 || typeof value.reputationScore !== 'number' || !Number.isFinite(value.reputationScore) || value.reputationScore < 0 || value.reputationScore > 100 || typeof value.evidenceConfidence !== 'number' || !Number.isFinite(value.evidenceConfidence) || value.evidenceConfidence < 0 || value.evidenceConfidence > 100 || !validDate(value.analyzedAt) || !isText(value.researchPrompt)) throw Error('Invalid opportunity analysis.');
   const analysis = value as unknown as OpportunityAnalysis;
+  if (analysis.researchNotes != null) {
+    const notes = analysis.researchNotes;
+    if (!isObject(notes) || !isText(notes.summary) || notes.summary.length > 4000 || !Array.isArray(notes.facts) || notes.facts.length > 30 || notes.facts.some(f => !isObject(f) || !isText(f.claim) || f.claim.length > 500 || !isText(f.sourceUrl) || (f.sourceUrl && !/^https?:\/\//i.test(f.sourceUrl))) || !Array.isArray(notes.hypotheses) || notes.hypotheses.length > 30 || notes.hypotheses.some(x => !isText(x) || x.length > 500) || !Array.isArray(notes.unknowns) || notes.unknowns.length > 30 || notes.unknowns.some(x => !isText(x) || x.length > 500) || !Array.isArray(notes.nextSteps) || notes.nextSteps.length > 20 || notes.nextSteps.some(x => !isText(x) || x.length > 500) || !validDate(notes.importedAt)) throw Error('Invalid imported research notes.');
+  }
   if (analysis.opportunities.length !== services.length || analysis.opportunities.some(item => !isObject(item) || !services.includes(item.service) || !priorities.includes(item.priority) || !Number.isFinite(item.score) || item.score < 0 || item.score > 100 || !Array.isArray(item.evidenceIds) || item.evidenceIds.some(id => !isText(id)) || !isText(item.rationale))) throw Error('Invalid service opportunity records.');
   analysis.evidence.forEach(validateEvidence);
   return analysis;
@@ -49,6 +53,30 @@ export function normalizeOpportunityData<T extends { businesses?: BusinessRecord
 }
 
 export type BusinessImportRow = Partial<Pick<BusinessRecord, 'name'|'category'|'location'|'websiteUrl'|'phone'|'email'|'rating'|'reviewCount'|'profiles'|'discoverySource'|'sourceUrl'|'websiteStatus'>> & { name: string };
+
+export function parseImportedResearch(text: string, now = new Date()): NonNullable<OpportunityAnalysis['researchNotes']> {
+  if (!text.trim() || text.length > 20000) throw Error('Paste research JSON under 20 KB.');
+  let input: unknown;
+  try { input = JSON.parse(text); } catch { throw Error('Research must be valid JSON.'); }
+  if (!isObject(input)) throw Error('Research must be a JSON object.');
+  const list = (key: string, limit: number) => {
+    const value = input[key];
+    if (value === undefined) return [] as unknown[];
+    if (!Array.isArray(value) || value.length > limit) throw Error(`Research ${key} must be a list of at most ${limit} items.`);
+    return value;
+  };
+  const summary = input.summary;
+  if (typeof summary !== 'string' || !summary.trim() || summary.length > 4000) throw Error('Research summary is required (maximum 4,000 characters).');
+  const facts = list('facts', 30).map((item, index) => {
+    if (!isObject(item) || !isText(item.claim) || !item.claim.trim() || item.claim.length > 500 || !isText(item.sourceUrl) || !/^https?:\/\//i.test(item.sourceUrl)) throw Error(`Research fact ${index + 1} needs a claim and an HTTP(S) source URL.`);
+    return { claim: item.claim.trim(), sourceUrl: item.sourceUrl };
+  });
+  const strings = (key: string, limit: number) => list(key, limit).map((item, index) => {
+    if (!isText(item) || !item.trim() || item.length > 500) throw Error(`Research ${key} item ${index + 1} must be text under 500 characters.`);
+    return item.trim();
+  });
+  return { summary: summary.trim(), facts, hypotheses: strings('hypotheses', 30), unknowns: strings('unknowns', 30), nextSteps: strings('nextSteps', 20), importedAt: now.toISOString() };
+}
 
 export function parseBusinessCsv(text: string): BusinessImportRow[] {
   if (text.length > 100000 || !text.trim()) throw Error('Import a non-empty CSV under 100 KB.');

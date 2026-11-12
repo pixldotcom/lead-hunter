@@ -49,6 +49,16 @@ export type OpportunityAnalysis = {
   evidenceConfidence: number;
   analyzedAt: string;
   researchPrompt: string;
+  researchNotes?: ImportedResearch | null;
+};
+
+export type ImportedResearch = {
+  summary: string;
+  facts: { claim: string; sourceUrl: string }[];
+  hypotheses: string[];
+  unknowns: string[];
+  nextSteps: string[];
+  importedAt: string;
 };
 
 export const SERVICE_LABELS: Record<ServiceArea, string> = {
