@@ -40,12 +40,11 @@ export function detectOpportunities(business: BusinessRecord, evidence: Opportun
   const reputationScore = business.rating === null || business.reviewCount === null
     ? 0
     : Math.min(100, Math.round((business.rating / 5) * 65 + Math.min(business.reviewCount, 100) / 100 * 35));
-  const websiteBoost = business.websiteStatus === 'outdated' || business.websiteStatus === 'no_website_found' ? 25 : 0;
   const evidenceConfidence = evidence.length
     ? Math.round(evidence.filter(item => item.confidence === 'confirmed').length / evidence.length * 100)
     : 0;
   const scored = scoreOpportunities(business, evidence, opportunities);
-  const totalScore = Math.min(100, Math.round(scored.total * 0.8 + reputationScore * 0.1 + websiteBoost * 0.1));
+  const totalScore = scored.total;
 
   const analysis: OpportunityAnalysis = {
     businessId: business.id,
