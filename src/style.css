@@ -246,3 +246,5 @@ a,.linkbtn{color:var(--brand-orange)}
  .opportunity-workspace .opportunity-card h3{font-size:.9rem}
  .opportunity-workspace>.panel{box-shadow:none}
 }
+
+@media(max-width:767px){.v2-mobile-import-control:not(.v2-import-visible){display:none}}
