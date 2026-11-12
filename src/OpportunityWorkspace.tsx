@@ -8,6 +8,7 @@ import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusi
 import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } from './opportunityModel';
 import { searchOpenStreetMap, type OSMBusiness } from './openStreetMap';
 import { buildQualifiedShortlist, buildProspectBrief, type QualificationTier } from './prospectQualification';
+import { prepareOutreach, type OutreachChannel } from './outreachPreparation';
 
 const statusLabels: Record<WebsiteStatus, string> = {
   no_website_found: 'No website found',
@@ -41,6 +42,10 @@ export function OpportunityWorkspace() {
   const [sourceUrl, Source] = useState('');
   const [filter, Filter] = useState('all');
   const [qualificationFilter, QualificationFilter] = useState<QualificationTier | 'all'>('all');
+  const [outreachBusinessId, OutreachBusiness] = useState('');
+  const [outreachChannel, OutreachChannelInput] = useState<OutreachChannel>('email');
+  const [outreachDraft, OutreachDraft] = useState('');
+  const [outreachApproved, OutreachApproved] = useState(false);
   const [busy, Busy] = useState(false);
   const [notice, Notice] = useState('');
   const [error, ErrorMessage] = useState('');
@@ -218,6 +223,20 @@ export function OpportunityWorkspace() {
     await runQueue(failed);
   };
 
+  const openOutreach = (prospect: ReturnType<typeof buildQualifiedShortlist>[number]) => {
+    const channel: OutreachChannel = prospect.business.email ? 'email' : prospect.business.phone ? 'phone' : 'contact_form';
+    OutreachBusiness(prospect.business.id);
+    OutreachChannelInput(channel);
+    OutreachDraft(prepareOutreach(prospect,channel).message);
+    OutreachApproved(false);
+  };
+
+  const changeOutreachChannel = (prospect: ReturnType<typeof buildQualifiedShortlist>[number], channel: OutreachChannel) => {
+    OutreachChannelInput(channel);
+    OutreachDraft(prepareOutreach(prospect,channel).message);
+    OutreachApproved(false);
+  };
+
   const copyPrompt = async (prompt: string) => {
     try { await navigator.clipboard.writeText(prompt); Notice('Research prompt copied. Paste it into ChatGPT when you are ready to research this business.'); }
     catch { ErrorMessage('Clipboard access was blocked. Open the analysis and copy the research prompt manually.'); }
@@ -373,7 +392,21 @@ export function OpportunityWorkspace() {
         <div className="between"><div><h3>{item.business.name}</h3><p>{[item.business.category,item.business.location].filter(Boolean).join(' · ')}</p></div><strong>{item.tier === 'ready' ? 'Ready for human review' : item.tier === 'research' ? 'Research next' : item.tier === 'verify' ? 'Verify details' : 'Needs analysis'}</strong></div>
         <p>{item.reason}</p><p><strong>Opportunity score:</strong> {item.analysis?.totalScore ?? 'Not analyzed'} · <strong>Best service:</strong> {item.recommendedService?.replace('_',' ') ?? 'Not verified'}</p>
         {item.missing.length > 0 && <p className="muted">Missing: {item.missing.join(' · ')}</p>}
-        <div className="headbuttons">{item.analysis && <button className="secondary" onClick={() => void copyPrompt(item.analysis!.researchPrompt)}>Copy research prompt</button>}<button className="primary" onClick={() => void copyPrompt(buildProspectBrief(item))}>Copy qualification brief</button>{item.business.sourceUrl && <a className="secondary" href={item.business.sourceUrl} target="_blank" rel="noopener noreferrer">Check source</a>}</div>
+        <div className="headbuttons">{item.analysis && <button className="secondary" onClick={() => void copyPrompt(item.analysis!.researchPrompt)}>Copy research prompt</button>}<button className="secondary" onClick={() => void copyPrompt(buildProspectBrief(item))}>Copy qualification brief</button><button className="primary" onClick={() => openOutreach(item)}>Prepare outreach</button>{item.business.sourceUrl && <a className="secondary" href={item.business.sourceUrl} target="_blank" rel="noopener noreferrer">Check source</a>}</div>
+        {outreachBusinessId === item.business.id && (() => {
+          const kit = prepareOutreach(item,outreachChannel);
+          return <div className="opportunity-notice"><h4>Human-reviewed outreach studio</h4><p className="muted">Draft only. Nothing is sent or scheduled. Check the business, sources, contact permission, and local outreach rules before using this text.</p>
+            <label>Channel<select value={outreachChannel} onChange={e => changeOutreachChannel(item,e.target.value as OutreachChannel)}><option value="email">Email</option><option value="phone">Phone call script</option><option value="contact_form">Website contact form</option></select></label>
+            {outreachChannel === 'email' && <p><strong>Subject:</strong> {kit.subject} · <strong>Recipient:</strong> {item.business.email || 'Email not recorded'}</p>}
+            {outreachChannel === 'phone' && <p><strong>Business phone:</strong> {item.business.phone || 'Phone not recorded'}</p>}
+            {kit.sourceUrls.length > 0 && <p><strong>Sources to check:</strong> {kit.sourceUrls.map(url => <a key={url} href={url} target="_blank" rel="noopener noreferrer">{url} </a>)}</p>}
+            {kit.checks.length > 0 && <div role="alert"><strong>Complete before using this draft:</strong><ul>{kit.checks.map(check => <li key={check}>{check}</li>)}</ul></div>}
+            <label>Editable message<textarea rows={11} value={outreachDraft} onChange={e => { OutreachDraft(e.target.value); OutreachApproved(false); }}/></label>
+            <label><input type="checkbox" checked={outreachApproved} onChange={e => OutreachApproved(e.target.checked)}/> I reviewed the facts, verified the contact route, and will follow applicable outreach rules.</label>
+            <div className="headbuttons"><button className="primary" disabled={!kit.eligible || !outreachApproved || !outreachDraft.trim()} onClick={() => void copyPrompt((outreachChannel === 'email' ? `Subject: ${kit.subject}\n\n` : '') + outreachDraft)}>Copy reviewed draft</button><button className="secondary" onClick={() => {OutreachBusiness(''); OutreachApproved(false);}}>Close</button></div>
+          </div>;
+        })()}
+
       </article>)}</div>
       {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
     </section>
