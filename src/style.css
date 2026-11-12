@@ -150,3 +150,9 @@ a,.linkbtn{color:var(--brand-orange)}
 .opportunity-card details summary{cursor:pointer;font-size:.75rem;font-weight:600}
 .opportunity-card textarea{margin:8px 0;min-height:150px;font-family:ui-monospace,monospace;font-size:.68rem}
 @media(max-width:650px){.opportunity-workspace>.panel{padding:14px}.opportunity-score{display:grid}.website-status{white-space:normal}}
+
+
+.opportunity-status-control{display:grid;gap:5px;min-width:150px;font-size:.65rem;color:var(--muted)}
+.opportunity-status-control select{max-width:190px;padding:6px 8px;font-size:.68rem}
+.opportunity-workspace a.secondary{display:inline-flex;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:6px;text-decoration:none;color:var(--text);font-size:.7rem}
+.opportunity-workspace a.secondary:hover{border-color:var(--brand-orange)}
