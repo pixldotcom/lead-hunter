@@ -45,6 +45,9 @@ export function OpportunityWorkspace() {
   const [researchBusinessId, ResearchBusiness] = useState('');
   const [researchJson, ResearchJson] = useState('');
   const [osmResults, OSMResults] = useState<OSMBusiness[]>([]);
+  const [selectedOSM, SelectedOSM] = useState<string[]>([]);
+  const [autoAnalyzeOSM, AutoAnalyzeOSM] = useState(true);
+  const [discoveryProgress, DiscoveryProgress] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
   const working = useRef({ businesses, analyses });
@@ -198,23 +201,44 @@ export function OpportunityWorkspace() {
   };
 
   const searchOSM = async () => {
-    Busy(true); ErrorMessage(''); Notice('Searching OpenStreetMap…'); OSMResults([]);
-    try { const results = await searchOpenStreetMap(category, location); OSMResults(results); Notice(`${results.length} OpenStreetMap candidates found. Review the source links before importing.`); }
+    Busy(true); ErrorMessage(''); Notice('Searching OpenStreetMap…'); OSMResults([]); SelectedOSM([]); DiscoveryProgress('');
+    try { const results = await searchOpenStreetMap(category, location); OSMResults(results); SelectedOSM(results.map(row => row.sourceUrl)); Notice(`${results.length} OpenStreetMap candidates found. Review the source links before importing.`); }
     catch (e) { ErrorMessage(e instanceof Error ? e.message : 'OpenStreetMap search failed.'); Notice(''); }
     finally { Busy(false); }
   };
 
   const importOSM = async () => {
+    if (busy || !selectedOSM.length) return;
+    Busy(true); ErrorMessage(''); DiscoveryProgress('Preparing selected businesses…');
     try {
+      const selected = osmResults.filter(row => selectedOSM.includes(row.sourceUrl));
       let nextBusinesses = [...working.current.businesses], added = 0;
-      for (const row of osmResults) {
+      const imported: BusinessRecord[] = [];
+      for (const row of selected) {
         const record = createBusinessRecord(row);
         if (nextBusinesses.some(item => sameBusiness(item, record))) continue;
-        nextBusinesses = [record, ...nextBusinesses]; added++;
+        nextBusinesses = [record, ...nextBusinesses]; imported.push(record); added++;
       }
-      await persist(nextBusinesses);
-      Notice(`${added} businesses imported; ${osmResults.length - added} duplicates skipped. OpenStreetMap does not provide reputation ratings.`); OSMResults([]);
+      if (added) await persist(nextBusinesses);
+      Notice(`${added} businesses imported; ${selected.length - added} duplicates skipped. Missing OSM website tags are not proof a business has no website.`);
+      OSMResults([]); SelectedOSM([]);
+      if (autoAnalyzeOSM && imported.length) {
+        let analyzed = 0;
+        for (const business of imported) {
+          if (cancelBatch.current) break;
+          DiscoveryProgress(`Analyzing ${analyzed + 1} of ${imported.length}: ${business.name}`);
+          try {
+            await analyze(business);
+            analyzed++;
+          } catch (error) {
+            ErrorMessage(`Analysis stopped after ${analyzed} businesses: ${error instanceof Error ? error.message : 'unknown error'}`);
+            break;
+          }
+        }
+        Notice(`Imported ${added} businesses and analyzed ${analyzed}. Review their scores in the opportunity queue below.`);
+      }
     } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not import OpenStreetMap results.'); }
+    finally { Busy(false); DiscoveryProgress(''); cancelBatch.current = false; }
   };
 
   const importExistingCandidates = async () => {
@@ -258,10 +282,25 @@ export function OpportunityWorkspace() {
     <div className="pagehead"><div><i>OPPORTUNITY-FIRST DISCOVERY</i><h1>Business Opportunities</h1><p>Prioritize businesses with a strong reputation and a weak or missing website, then uncover SEO, local SEO, performance and marketing opportunities.</p></div></div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status" className="opportunity-notice">{notice}</p>}
     <section className="panel">
-      <h2>Discover from OpenStreetMap</h2><p>Search public OpenStreetMap listings by a supported business type and city. Results are candidate listings, not verified businesses; ratings and review counts remain unknown. Respect OpenStreetMap usage policies and avoid repeated searches.</p>
-      <div className="headbuttons"><button className="primary" disabled={busy || !category.trim() || !location.trim()} onClick={() => void searchOSM()}>Search OpenStreetMap</button></div>
-      {osmResults.length > 0 && <><p>{osmResults.length} candidates · up to 100 shown · {osmResults.filter(row => row.websiteUrl).length} have a listed website</p><div className="opportunity-list">{osmResults.slice(0, 20).map((row, i) => <p key={`${row.sourceUrl}-${i}`}><b>{row.name}</b> · {row.location}{row.websiteUrl && <> · <a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">Website</a></>} · <a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">OSM source</a></p>)}</div><button className="primary" disabled={busy} onClick={() => void importOSM()}>Import {osmResults.length} candidates</button><button className="secondary" onClick={() => OSMResults([])}>Discard results</button></>}
-      <p className="muted">Supported types include dentist, restaurant, cafe, hotel, hair salon, pharmacy, beauty salon, gym, veterinary clinic, car repair, bakery, optician, real estate agency, law firm, accounting firm, travel agency, clothing store, supermarket and school.</p>
+      <div className="between"><div><h2>1. Discover businesses</h2><p>Find public business listings by category and location, then import selected prospects and optionally analyze them automatically. Ratings are not supplied by OpenStreetMap.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
+      <div className="formgrid">
+        <label>Business category<input value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. dentist, gym, hotel"/></label>
+        <label>City or administrative area<input value={location} maxLength={120} onChange={e => Location(e.target.value)} placeholder="e.g. Ludhiana"/></label>
+      </div>
+      <div className="headbuttons"><button className="primary" disabled={busy || !category.trim() || !location.trim()} onClick={() => void searchOSM()}>{busy ? 'Working…' : 'Find businesses'}</button>
+        {searchQuery && <a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Cross-check on Google Maps</a>}
+      </div>
+      {discoveryProgress && <p role="status" className="opportunity-notice">{discoveryProgress}</p>}
+      {osmResults.length > 0 && <>
+        <div className="between"><div><h3>2. Review discovery results</h3><p>{osmResults.length} candidates · {selectedOSM.length} selected · {osmResults.filter(row => row.websiteUrl).length} have a listed website</p></div><div className="headbuttons"><button className="secondary" disabled={busy} onClick={() => SelectedOSM(osmResults.map(row => row.sourceUrl))}>Select all</button><button className="secondary" disabled={busy} onClick={() => SelectedOSM([])}>Clear selection</button></div></div>
+        <div className="opportunity-list" style={{maxHeight:360,overflowY:'auto'}}>{osmResults.map((row, i) => <label key={`${row.sourceUrl}-${i}`} style={{display:'flex',gap:12,alignItems:'flex-start',padding:'9px 4px',borderBottom:'1px solid var(--line)'}}>
+          <input type="checkbox" disabled={busy} checked={selectedOSM.includes(row.sourceUrl)} onChange={e => SelectedOSM(current => e.target.checked ? [...current,row.sourceUrl] : current.filter(url => url !== row.sourceUrl))}/>
+          <span><strong>{row.name}</strong> · {row.location}<br/>{row.websiteUrl ? <a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">Listed website</a> : <span className="muted">No website listed in OSM — verification needed</span>} · <a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">OSM source</a></span>
+        </label>)}</div>
+        <label style={{display:'flex',gap:9,alignItems:'center',margin:'12px 0'}}><input type="checkbox" checked={autoAnalyzeOSM} disabled={busy} onChange={e => AutoAnalyzeOSM(e.target.checked)}/> Analyze newly imported businesses automatically (uses existing free website scanner)</label>
+        <div className="headbuttons"><button className="primary" disabled={busy || !selectedOSM.length} onClick={() => {cancelBatch.current = false; void importOSM();}}>Import {selectedOSM.length} selected {autoAnalyzeOSM ? 'and analyze' : 'businesses'}</button><button className="secondary" disabled={busy} onClick={() => {OSMResults([]);SelectedOSM([]);}}>Discard results</button>{busy && <button className="secondary" onClick={() => {cancelBatch.current = true;}}>Stop after current business</button>}</div>
+      </>}
+      <p className="muted">Supported types include dentist, restaurant, cafe, hotel, hair salon, pharmacy, beauty salon, gym, veterinary clinic, car repair, bakery, optician, real estate agency, law firm, accounting firm, travel agency, clothing store, supermarket and school. OpenStreetMap coverage varies by area.</p>
     </section>
     <section className="panel">
       <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div></div>
