@@ -1,5 +1,5 @@
-import { parseCsv, uid } from './domain';
-import type { BusinessRecord, OpportunityAnalysis, OpportunityEvidence, ServiceArea, WebsiteStatus, EvidenceConfidence, OpportunityPriority } from './opportunityModel';
+import { parseCsv, uid } from './domain.ts';
+import type { BusinessRecord, OpportunityAnalysis, OpportunityEvidence, ServiceArea, WebsiteStatus, EvidenceConfidence, OpportunityPriority } from './opportunityModel.ts';
 
 const services: ServiceArea[] = ['website', 'seo', 'local_seo', 'performance', 'marketing'];
 const websiteStatuses: WebsiteStatus[] = ['no_website_found', 'outdated', 'needs_improvement', 'healthy', 'unknown'];
