@@ -26,6 +26,18 @@ describe('opportunity business persistence', () => {
     expect(sameBusiness(a, b)).toBe(true);
   });
 
+  it('uses the website as a matching identity when phone records differ', () => {
+    const a = createBusinessRecord({ name: 'Example Dental', location: 'Ludhiana', websiteUrl: 'https://example.test', phone: '1111111111' });
+    const b = createBusinessRecord({ name: 'Example Dental', location: 'Ludhiana', websiteUrl: 'https://www.example.test/', phone: '2222222222' });
+    expect(sameBusiness(a, b)).toBe(true);
+  });
+
+  it('keeps same-name businesses separate when both phone and website differ', () => {
+    const a = createBusinessRecord({ name: 'Example Dental', location: 'Ludhiana', websiteUrl: 'https://one.test', phone: '1111111111' });
+    const b = createBusinessRecord({ name: 'Example Dental', location: 'Ludhiana', websiteUrl: 'https://two.test', phone: '2222222222' });
+    expect(sameBusiness(a, b)).toBe(false);
+  });
+
   it('rejects unsupported website protocols', () => {
     expect(() => createBusinessRecord({ name: 'Example', websiteUrl: 'javascript:alert(1)' })).toThrow(/http:\/\/ or https:\/\//i);
   });
