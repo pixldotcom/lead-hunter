@@ -45,7 +45,7 @@ Lead Hunter prioritizes businesses with strong existing reputation and clear dig
 - Add tests for no-website records, legacy discovery payload compatibility, deduplication, and URL validation.
 
 ### Next integration steps
-- Add adapters from existing website candidates and supported discovery imports into the business-first model.
+- Expand supported discovery imports into the business-first model.
 - Improve batch processing with cancellation, resumability, and per-business progress in the new workspace.
 - Add evidence export and richer source provenance, while keeping storage within the current 3 MB cloud limit.
 - Calibrate scoring weights against human-reviewed prospects before treating the score as predictive.
