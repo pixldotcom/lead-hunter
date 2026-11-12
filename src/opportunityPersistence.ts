@@ -1,0 +1,100 @@
+import { parseCsv, uid } from './domain';
+import type { BusinessRecord, OpportunityAnalysis, OpportunityEvidence, ServiceArea, WebsiteStatus, EvidenceConfidence, OpportunityPriority } from './opportunityModel';
+
+const services: ServiceArea[] = ['website', 'seo', 'local_seo', 'performance', 'marketing'];
+const websiteStatuses: WebsiteStatus[] = ['no_website_found', 'outdated', 'needs_improvement', 'healthy', 'unknown'];
+const confidences: EvidenceConfidence[] = ['confirmed', 'likely', 'unknown'];
+const priorities: OpportunityPriority[] = ['high', 'medium', 'low', 'unverified'];
+const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const isText = (value: unknown): value is string => typeof value === 'string';
+const validDate = (value: unknown) => isText(value) && (!value || Number.isFinite(Date.parse(value)));
+const optionalNumber = (value: unknown, max: number) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max);
+const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const normalizePhone = (value: string) => value.replace(/\D/g, '');
+
+export function validateBusinessRecord(value: unknown): BusinessRecord {
+  if (!isObject(value)) throw Error('Invalid opportunity business record.');
+  const b = value as unknown as BusinessRecord;
+  if (!['id','name','category','location','websiteUrl','websiteStatus','phone','email','discoverySource','sourceUrl','discoveredAt','updatedAt'].every(key => isText(value[key]))) throw Error('Business record is missing required text fields.');
+  if (!b.id.trim() || !b.name.trim() || !websiteStatuses.includes(b.websiteStatus) || !optionalNumber(b.rating, 5) || !optionalNumber(b.reviewCount, 100000000) || (b.rating !== null && b.rating > 5) || (b.reviewCount !== null && !Number.isSafeInteger(b.reviewCount)) || !Array.isArray(b.profiles) || b.profiles.length > 30 || b.profiles.some(p => !isText(p) || p.length > 200) || !validDate(b.discoveredAt) || !validDate(b.updatedAt)) throw Error('Invalid business record fields.');
+  if (b.websiteUrl && !/^https?:\/\//i.test(b.websiteUrl)) throw Error('Business website must use HTTP or HTTPS.');
+  if (b.sourceUrl && !/^https?:\/\//i.test(b.sourceUrl)) throw Error('Business source must use HTTP or HTTPS.');
+  return b;
+}
+
+function validateEvidence(value: unknown): OpportunityEvidence {
+  if (!isObject(value) || !isText(value.id) || !isText(value.signal) || !isText(value.description) || !isText(value.sourceUrl) || !isText(value.observedAt) || !services.includes(value.service as ServiceArea) || !confidences.includes(value.confidence as EvidenceConfidence) || !validDate(value.observedAt)) throw Error('Invalid opportunity evidence.');
+  const evidence = value as unknown as OpportunityEvidence;
+  if (evidence.sourceUrl && !/^https?:\/\//i.test(evidence.sourceUrl)) throw Error('Evidence source must use HTTP or HTTPS.');
+  return evidence;
+}
+
+export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis {
+  if (!isObject(value) || !isText(value.businessId) || !websiteStatuses.includes(value.websiteStatus as WebsiteStatus) || !Array.isArray(value.opportunities) || !Array.isArray(value.evidence) || !Number.isFinite(value.totalScore) || value.totalScore < 0 || value.totalScore > 100 || !Number.isFinite(value.reputationScore) || value.reputationScore < 0 || value.reputationScore > 100 || !Number.isFinite(value.evidenceConfidence) || value.evidenceConfidence < 0 || value.evidenceConfidence > 100 || !validDate(value.analyzedAt) || !isText(value.researchPrompt)) throw Error('Invalid opportunity analysis.');
+  const analysis = value as unknown as OpportunityAnalysis;
+  if (analysis.opportunities.length !== services.length || analysis.opportunities.some(item => !isObject(item) || !services.includes(item.service) || !priorities.includes(item.priority) || !Number.isFinite(item.score) || item.score < 0 || item.score > 100 || !Array.isArray(item.evidenceIds) || item.evidenceIds.some(id => !isText(id)) || !isText(item.rationale))) throw Error('Invalid service opportunity records.');
+  analysis.evidence.forEach(validateEvidence);
+  return analysis;
+}
+
+export function normalizeOpportunityData<T extends { businesses?: BusinessRecord[]; opportunityAnalyses?: OpportunityAnalysis[] }>(data: T): T & { businesses: BusinessRecord[]; opportunityAnalyses: OpportunityAnalysis[] } {
+  const businesses = data.businesses ?? [];
+  const opportunityAnalyses = data.opportunityAnalyses ?? [];
+  if (!Array.isArray(businesses) || businesses.length > 10000 || !Array.isArray(opportunityAnalyses) || opportunityAnalyses.length > 10000) throw Error('Opportunity workspace record limit exceeded.');
+  businesses.forEach(validateBusinessRecord);
+  opportunityAnalyses.forEach(validateOpportunityAnalysis);
+  const businessIds = new Set(businesses.map(b => b.id));
+  if (businessIds.size !== businesses.length || opportunityAnalyses.some(a => !businessIds.has(a.businessId)) || new Set(opportunityAnalyses.map(a => a.businessId)).size !== opportunityAnalyses.length) throw Error('Opportunity analyses must reference unique saved businesses.');
+  return { ...data, businesses, opportunityAnalyses };
+}
+
+export type BusinessImportRow = Partial<Pick<BusinessRecord, 'name'|'category'|'location'|'websiteUrl'|'phone'|'email'|'rating'|'reviewCount'|'profiles'|'discoverySource'|'sourceUrl'|'websiteStatus'>> & { name: string };
+
+export function parseBusinessCsv(text: string): BusinessImportRow[] {
+  if (text.length > 100000 || !text.trim()) throw Error('Import a non-empty CSV under 100 KB.');
+  const rows = parseCsv(text);
+  if (rows.length > 500) throw Error('Import is limited to 500 businesses at a time.');
+  return rows.map((row, index) => {
+    const get = (...names: string[]) => Object.entries(row).find(([key]) => names.includes(key.trim().toLowerCase()))?.[1]?.trim() ?? '';
+    const name = get('name', 'business', 'business name');
+    if (!name) throw Error(`CSV row ${index + 2}: business name is required.`);
+    const ratingRaw = get('rating', 'stars');
+    const reviewsRaw = get('reviewcount', 'review count', 'reviews');
+    const rating = ratingRaw ? Number(ratingRaw) : null;
+    const reviewCount = reviewsRaw ? Number(reviewsRaw) : null;
+    if (rating !== null && (!Number.isFinite(rating) || rating < 0 || rating > 5)) throw Error(`CSV row ${index + 2}: rating must be between 0 and 5.`);
+    if (reviewCount !== null && (!Number.isSafeInteger(reviewCount) || reviewCount < 0)) throw Error(`CSV row ${index + 2}: review count must be a non-negative whole number.`);
+    const statusRaw = get('websitestatus', 'website status').toLowerCase().replace(/[ -]/g, '_');
+    const websiteStatus = statusRaw ? websiteStatuses.find(status => status === statusRaw) : undefined;
+    if (statusRaw && !websiteStatus) throw Error(`CSV row ${index + 2}: unknown website status.`);
+    const websiteUrl = get('website', 'websiteurl', 'website url', 'url');
+    const sourceUrl = get('sourceurl', 'source url', 'listing url');
+    const profiles = get('profiles', 'social profiles').split(/[;|]/).map(item => item.trim()).filter(Boolean);
+    return { name, category: get('category', 'industry', 'type'), location: get('location', 'city', 'area'), websiteUrl, phone: get('phone', 'telephone'), email: get('email'), rating, reviewCount, profiles, discoverySource: get('discoverysource', 'discovery source', 'source') || 'CSV import', sourceUrl, ...(websiteStatus ? { websiteStatus } : {}) };
+  });
+}
+
+export function createBusinessRecord(row: BusinessImportRow, now = new Date()): BusinessRecord {
+  const stamp = now.toISOString();
+  const websiteUrl = (row.websiteUrl ?? '').trim();
+  if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) throw Error('Website URL must start with http:// or https://.');
+  const sourceUrl = (row.sourceUrl ?? '').trim();
+  if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) throw Error('Source URL must start with http:// or https://.');
+  const record: BusinessRecord = {
+    id: uid(), name: row.name.trim(), category: row.category?.trim() ?? '', location: row.location?.trim() ?? '',
+    websiteUrl, websiteStatus: row.websiteStatus ?? 'unknown', rating: row.rating ?? null, reviewCount: row.reviewCount ?? null,
+    phone: row.phone?.trim() ?? '', email: row.email?.trim() ?? '', profiles: row.profiles ?? [],
+    discoverySource: row.discoverySource?.trim() ?? 'Manual entry', sourceUrl, discoveredAt: stamp, updatedAt: stamp,
+  };
+  return validateBusinessRecord(record);
+}
+
+export function sameBusiness(a: BusinessRecord, b: BusinessRecord): boolean {
+  if (normalize(a.name) !== normalize(b.name) || normalize(a.location) !== normalize(b.location)) return false;
+  const phoneA = normalizePhone(a.phone), phoneB = normalizePhone(b.phone);
+  if (phoneA && phoneB) return phoneA === phoneB;
+  const siteA = a.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+  const siteB = b.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+  if (siteA && siteB) return siteA === siteB;
+  return true;
+}
