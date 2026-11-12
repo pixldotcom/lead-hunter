@@ -9,7 +9,7 @@ const isObject = (value: unknown): value is Record<string, unknown> => !!value &
 const isText = (value: unknown): value is string => typeof value === 'string';
 const validDate = (value: unknown) => isText(value) && (!value || Number.isFinite(Date.parse(value)));
 const optionalNumber = (value: unknown, max: number) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max);
-const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 
 export function validateBusinessRecord(value: unknown): BusinessRecord {
