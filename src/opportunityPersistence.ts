@@ -56,8 +56,11 @@ export type BusinessImportRow = Partial<Pick<BusinessRecord, 'name'|'category'|'
 
 export function parseImportedResearch(text: string, now = new Date()): NonNullable<OpportunityAnalysis['researchNotes']> {
   if (!text.trim() || text.length > 20000) throw Error('Paste research JSON under 20 KB.');
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```\s*$/i.exec(trimmed);
+  const payload = fenced ? fenced[1].trim() : trimmed;
   let input: unknown;
-  try { input = JSON.parse(text); } catch { throw Error('Research must be valid JSON.'); }
+  try { input = JSON.parse(payload); } catch { throw Error('Research must be a valid JSON object. Remove any explanation before or after the JSON.'); }
   if (!isObject(input)) throw Error('Research must be a JSON object.');
   const list = (key: string, limit: number) => {
     const value = input[key];
