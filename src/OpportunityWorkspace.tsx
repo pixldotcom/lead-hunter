@@ -7,6 +7,7 @@ import { detectOpportunities, prioritizedOpportunities } from './opportunityDete
 import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
 import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } from './opportunityModel';
 import { searchOpenStreetMap, type OSMBusiness } from './openStreetMap';
+import { buildQualifiedShortlist, buildProspectBrief, type QualificationTier } from './prospectQualification';
 
 const statusLabels: Record<WebsiteStatus, string> = {
   no_website_found: 'No website found',
@@ -39,6 +40,7 @@ export function OpportunityWorkspace() {
   const [phone, Phone] = useState('');
   const [sourceUrl, Source] = useState('');
   const [filter, Filter] = useState('all');
+  const [qualificationFilter, QualificationFilter] = useState<QualificationTier | 'all'>('all');
   const [busy, Busy] = useState(false);
   const [notice, Notice] = useState('');
   const [error, ErrorMessage] = useState('');
@@ -298,6 +300,9 @@ export function OpportunityWorkspace() {
     const score = (analyses.find(item => item.businessId === b.id)?.totalScore ?? -1) - (analyses.find(item => item.businessId === a.id)?.totalScore ?? -1);
     return score || (b.rating ?? -1) - (a.rating ?? -1) || (b.reviewCount ?? -1) - (a.reviewCount ?? -1) || a.name.localeCompare(b.name);
   });
+  const shortlist = buildQualifiedShortlist(businesses, analyses);
+  const shortlisted = shortlist.filter(item => qualificationFilter === 'all' || item.tier === qualificationFilter);
+  const qualificationCounts = { ready: shortlist.filter(item => item.tier === 'ready').length, research: shortlist.filter(item => item.tier === 'research').length, verify: shortlist.filter(item => item.tier === 'verify').length, analyze: shortlist.filter(item => item.tier === 'analyze').length };
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
   return <div className="opportunity-workspace">
     <div className="pagehead"><div><i>OPPORTUNITY-FIRST DISCOVERY</i><h1>Business Opportunities</h1><p>Prioritize businesses with a strong reputation and a weak or missing website, then uncover SEO, local SEO, performance and marketing opportunities.</p></div></div>
@@ -341,6 +346,18 @@ export function OpportunityWorkspace() {
         <div className="headbuttons"><button className="primary" type="submit">Save business</button><button className="secondary" type="button" onClick={() => navigator.clipboard.writeText(csvTemplate).then(() => Notice('CSV template copied.')).catch(() => ErrorMessage('Could not copy CSV template.'))}>Copy CSV template</button>{searchQuery && <><a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Search Google Maps</a><a className="secondary" href={`https://www.google.com/search?q=${encodeURIComponent(searchQuery + ' business')}`} target="_blank" rel="noopener noreferrer">Search Google</a></>}</div>
       </form>
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
+    </section>
+    <section className="panel">
+      <div className="between"><div><h2>3. Qualification shortlist</h2><p>Evidence-first ranking for outreach decisions. Scores are signals, not proof; no messages are sent automatically.</p></div><span className="muted">{qualificationCounts.ready} ready for review · {qualificationCounts.research} research next</span></div>
+      <div className="headbuttons"><label>Qualification stage<select value={qualificationFilter} onChange={e => QualificationFilter(e.target.value as QualificationTier | 'all')}><option value="all">All ({shortlist.length})</option><option value="ready">Ready for human review ({qualificationCounts.ready})</option><option value="research">Research next ({qualificationCounts.research})</option><option value="verify">Verify details ({qualificationCounts.verify})</option><option value="analyze">Needs analysis ({qualificationCounts.analyze})</option></select></label></div>
+      {!shortlisted.length && <p className="muted">No businesses in this qualification stage yet.</p>}
+      <div className="opportunity-list">{shortlisted.slice(0,40).map(item => <article key={item.business.id} className="panel opportunity-card">
+        <div className="between"><div><h3>{item.business.name}</h3><p>{[item.business.category,item.business.location].filter(Boolean).join(' · ')}</p></div><strong>{item.tier === 'ready' ? 'Ready for human review' : item.tier === 'research' ? 'Research next' : item.tier === 'verify' ? 'Verify details' : 'Needs analysis'}</strong></div>
+        <p>{item.reason}</p><p><strong>Opportunity score:</strong> {item.analysis?.totalScore ?? 'Not analyzed'} · <strong>Best service:</strong> {item.recommendedService?.replace('_',' ') ?? 'Not verified'}</p>
+        {item.missing.length > 0 && <p className="muted">Missing: {item.missing.join(' · ')}</p>}
+        <div className="headbuttons">{item.analysis && <button className="secondary" onClick={() => void copyPrompt(item.analysis!.researchPrompt)}>Copy research prompt</button>}<button className="primary" onClick={() => void copyPrompt(buildProspectBrief(item))}>Copy qualification brief</button>{item.business.sourceUrl && <a className="secondary" href={item.business.sourceUrl} target="_blank" rel="noopener noreferrer">Check source</a>}</div>
+      </article>)}</div>
+      {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
     </section>
     <section className="panel">
       <div className="between"><div><h2>3. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
