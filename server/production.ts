@@ -1,9 +1,10 @@
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {logServerError} from './diagnostics.ts';
+import * as supabaseApp from './supabaseApp.ts';
 
 // Load the application inside the invocation boundary so import/setup failures
 // produce safe diagnostics and a closed response rather than an unhandled crash.
-export function createProductionHandler(load=()=>import('./supabaseApp.ts')){
+export function createProductionHandler(load=async()=>supabaseApp){
  let initialized:Promise<ReturnType<typeof import('./supabaseApp.ts').createSupabaseHandler>>|undefined;
  return async(req:IncomingMessage & {body?:unknown},res:ServerResponse)=>{
   try{
