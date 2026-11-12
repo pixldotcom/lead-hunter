@@ -68,7 +68,7 @@ export function normalizeLocation(value: string): string {
 }
 
 export function createBusinessIdentity(business: Pick<BusinessRecord, 'name' | 'location' | 'phone' | 'websiteUrl'>): string {
-  const phone = business.phone.replace(/\\D/g, '');
-  const website = business.websiteUrl.trim().toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/\\/$/, '');
+  const phone = business.phone.replace(/\D/g, '');
+  const website = business.websiteUrl.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
   return [normalizeBusinessName(business.name), normalizeLocation(business.location), phone || website].join('|');
 }
