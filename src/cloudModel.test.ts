@@ -17,7 +17,7 @@ describe('full cloud backup and safe legacy merge',()=>{
  it('imports opportunity businesses and remaps their analyses when a matching business already exists',()=>{
   const target=emptyCloud(),existing=createBusinessRecord({name:'Example Dental',location:'Ludhiana',websiteStatus:'unknown'});target.discovery.businesses=[existing];
   const source=emptyCloud(),original=createBusinessRecord({name:'Example Dental',location:'Ludhiana',websiteStatus:'no_website_found'});source.discovery.businesses=[original];source.discovery.opportunityAnalyses=[detectOpportunities(original,[])];
-  const merged=mergeCloud(target,source);expect(merged.summary.addedBusinesses).toBe(0);expect(merged.data.discovery.businesses).toHaveLength(1);expect(merged.data.discovery.opportunityAnalyses[0].businessId).toBe(existing.id);
+  const merged=mergeCloud(target,source);expect(merged.summary.addedBusinesses).toBe(0);expect(merged.data.discovery.businesses ?? []).toHaveLength(1);expect((merged.data.discovery.opportunityAnalyses ?? [])[0].businessId).toBe(existing.id);
  });
  it('validates complete backups and keeps existing account preferences by default',()=>{
   const target=emptyCloud(),source=emptyCloud();target.preferences.textScale=150;source.preferences.textScale=100;expect(mergeCloud(target,source).data.preferences.textScale).toBe(150);expect(()=>validateCloud({...source,preferences:{textScale:200}})).toThrow();
