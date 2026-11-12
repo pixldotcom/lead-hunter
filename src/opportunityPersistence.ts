@@ -92,9 +92,11 @@ export function createBusinessRecord(row: BusinessImportRow, now = new Date()): 
 export function sameBusiness(a: BusinessRecord, b: BusinessRecord): boolean {
   if (normalize(a.name) !== normalize(b.name) || normalize(a.location) !== normalize(b.location)) return false;
   const phoneA = normalizePhone(a.phone), phoneB = normalizePhone(b.phone);
-  if (phoneA && phoneB) return phoneA === phoneB;
   const siteA = a.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
   const siteB = b.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
-  if (siteA && siteB) return siteA === siteB;
+  if (phoneA && phoneB && phoneA === phoneB) return true;
+  if (siteA && siteB && siteA === siteB) return true;
+  if (phoneA && phoneB && phoneA !== phoneB) return false;
+  if (siteA && siteB && siteA !== siteB) return false;
   return true;
 }
