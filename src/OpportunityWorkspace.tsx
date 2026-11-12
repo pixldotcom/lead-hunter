@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useCloud } from './CloudWorkspace';
 import { uid } from './domain';
 import { requestAudit } from './analyzerApi';
@@ -42,17 +42,22 @@ export function OpportunityWorkspace() {
   const [notice, Notice] = useState('');
   const [error, ErrorMessage] = useState('');
   const file = useRef<HTMLInputElement>(null);
+  const working = useRef({ businesses, analyses });
+  useEffect(() => { working.current = { businesses, analyses }; }, [data]);
 
-  const persist = async (nextBusinesses: BusinessRecord[], nextAnalyses = analyses) => {
-    const next = { ...data, businesses: nextBusinesses, opportunityAnalyses: nextAnalyses };
+  const persist = async (nextBusinesses: BusinessRecord[], nextAnalyses = working.current.analyses) => {
+    const next = { ...cloud.snapshot.data.discovery, businesses: nextBusinesses, opportunityAnalyses: nextAnalyses };
     if (!await cloud.change('discovery', next)) throw new Error('Could not save the opportunity workspace to cloud. Your previous records are unchanged.');
+    working.current = { businesses: nextBusinesses, analyses: nextAnalyses };
   };
 
   const addBusiness = async (row: Parameters<typeof createBusinessRecord>[0]) => {
     const record = createBusinessRecord(row);
-    const existing = businesses.find(item => sameBusiness(item, record));
+    const currentBusinesses = working.current.businesses;
+    const currentAnalyses = working.current.analyses;
+    const existing = currentBusinesses.find(item => sameBusiness(item, record));
     if (existing) {
-      const merged = businesses.map(item => item.id === existing.id ? {
+      const merged = currentBusinesses.map(item => item.id === existing.id ? {
         ...item,
         category: item.category || record.category,
         websiteUrl: item.websiteUrl || record.websiteUrl,
@@ -66,14 +71,14 @@ export function OpportunityWorkspace() {
         discoverySource: item.discoverySource || record.discoverySource,
         updatedAt: new Date().toISOString(),
       } : item);
-      await persist(merged, analyses.filter(a => a.businessId !== existing.id));
+      await persist(merged, currentAnalyses.filter(a => a.businessId !== existing.id));
       return false;
     }
-    await persist([record, ...businesses]);
+    await persist([record, ...currentBusinesses]);
     return true;
   };
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     ErrorMessage(''); Notice('');
     try {
@@ -95,14 +100,23 @@ export function OpportunityWorkspace() {
     try {
       if (fileValue.size > 100_000) throw new Error('CSV exceeds the 100 KB import limit.');
       const rows = parseBusinessCsv(await fileValue.text());
+      let nextBusinesses = [...working.current.businesses];
+      let nextAnalyses = [...working.current.analyses];
       let added = 0;
-      for (const row of rows) if (await addBusiness(row)) added++;
+      for (const row of rows) {
+        const record = createBusinessRecord(row);
+        const existing = nextBusinesses.find(item => sameBusiness(item, record));
+        if (!existing) { nextBusinesses = [record, ...nextBusinesses]; added++; continue; }
+        nextBusinesses = nextBusinesses.map(item => item.id === existing.id ? { ...item, category: item.category || record.category, websiteUrl: item.websiteUrl || record.websiteUrl, websiteStatus: item.websiteStatus === 'unknown' ? record.websiteStatus : item.websiteStatus, rating: item.rating ?? record.rating, reviewCount: item.reviewCount ?? record.reviewCount, phone: item.phone || record.phone, email: item.email || record.email, profiles: [...new Set([...item.profiles, ...record.profiles])], sourceUrl: item.sourceUrl || record.sourceUrl, discoverySource: item.discoverySource || record.discoverySource, updatedAt: new Date().toISOString() } : item);
+        nextAnalyses = nextAnalyses.filter(item => item.businessId !== existing.id);
+      }
+      await persist(nextBusinesses, nextAnalyses);
       Notice(`${added} new businesses added; ${rows.length - added} matched existing records and were merged.`);
     } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'CSV import failed.'); }
   };
 
   const analyze = async (business: BusinessRecord) => {
-    let current = business;
+    let current = working.current.businesses.find(item => item.id === business.id) ?? business;
     const evidence: OpportunityEvidence[] = [];
     if (business.websiteUrl) {
       try {
@@ -127,8 +141,8 @@ export function OpportunityWorkspace() {
       }
     }
     const analysis = detectOpportunities(current, evidence);
-    const nextBusinesses = businesses.map(item => item.id === current.id ? current : item);
-    const nextAnalyses = [...analyses.filter(item => item.businessId !== current.id), analysis];
+    const nextBusinesses = working.current.businesses.map(item => item.id === current.id ? current : item);
+    const nextAnalyses = [...working.current.analyses.filter(item => item.businessId !== current.id), analysis];
     await persist(nextBusinesses, nextAnalyses);
     return analysis;
   };
