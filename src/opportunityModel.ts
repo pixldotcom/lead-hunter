@@ -60,15 +60,15 @@ export const SERVICE_LABELS: Record<ServiceArea, string> = {
 };
 
 export function normalizeBusinessName(value: string): string {
-  return value.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 export function normalizeLocation(value: string): string {
-  return value.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 export function createBusinessIdentity(business: Pick<BusinessRecord, 'name' | 'location' | 'phone' | 'websiteUrl'>): string {
-  const phone = business.phone.replace(/\\D/g, '');
-  const website = business.websiteUrl.trim().toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/\\/$/, '');
+  const phone = business.phone.replace(/\D/g, '');
+  const website = business.websiteUrl.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
   return [normalizeBusinessName(business.name), normalizeLocation(business.location), phone || website].join('|');
 }

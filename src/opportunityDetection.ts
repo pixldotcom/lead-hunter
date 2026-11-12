@@ -18,11 +18,14 @@ export function detectOpportunities(business: BusinessRecord, evidence: Opportun
     if (service === 'website') {
       if (business.websiteStatus === 'no_website_found') {
         score = Math.max(score, 85);
-        rationale = 'No official website was found during discovery. Verify ownership and search coverage before outreach.';
+        rationale = 'No official website was found during discovery. Verify the business identity and search coverage before outreach; absence from a source is not proof that no website exists.';
       } else if (business.websiteStatus === 'outdated') {
         score = Math.max(score, 90);
-        rationale = 'The website has been classified as outdated based on recorded website evidence.';
-      } else if (business.websiteStatus === 'unknown') {
+        rationale = 'A reviewer marked this website as outdated. Verify the assessment and record concrete examples before outreach.';
+      } else if (business.websiteStatus === 'needs_improvement') {
+        score = Math.max(score, 65);
+        rationale = 'A reviewer marked this website as needing improvement. Verify the specific issue and capture evidence before outreach.';
+      } else if (business.websiteStatus === 'unknown' && !matching.length) {
         score = Math.min(score, 15);
       }
     }
@@ -40,12 +43,11 @@ export function detectOpportunities(business: BusinessRecord, evidence: Opportun
   const reputationScore = business.rating === null || business.reviewCount === null
     ? 0
     : Math.min(100, Math.round((business.rating / 5) * 65 + Math.min(business.reviewCount, 100) / 100 * 35));
-  const websiteBoost = business.websiteStatus === 'outdated' || business.websiteStatus === 'no_website_found' ? 25 : 0;
   const evidenceConfidence = evidence.length
     ? Math.round(evidence.filter(item => item.confidence === 'confirmed').length / evidence.length * 100)
     : 0;
   const scored = scoreOpportunities(business, evidence, opportunities);
-  const totalScore = Math.min(100, Math.round(scored.total * 0.8 + reputationScore * 0.1 + websiteBoost * 0.1));
+  const totalScore = scored.total;
 
   const analysis: OpportunityAnalysis = {
     businessId: business.id,

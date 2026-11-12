@@ -51,4 +51,20 @@ describe('detectOpportunities', () => {
     expect(performance?.priority).toBe('low');
     expect(performance?.evidenceIds).toContain('evidence-1');
   });
+  it('treats an outdated status as a reviewer assessment that still needs evidence', () => {
+    const result = detectOpportunities({ ...base, websiteUrl: 'https://example.test', websiteStatus: 'outdated' }, []);
+    const website = result.opportunities.find(item => item.service === 'website');
+    expect(website?.priority).toBe('high');
+    expect(website?.rationale).toContain('A reviewer marked this website as outdated');
+  });
+
+  it('allows confirmed website findings to create an opportunity when website status is unknown', () => {
+    const evidence: OpportunityEvidence[] = [
+      { id: 'web-1', service: 'website', signal: 'missing-title', description: 'The homepage has no title element.', sourceUrl: 'https://example.test/', observedAt: '2026-01-01T00:00:00.000Z', confidence: 'confirmed' },
+      { id: 'web-2', service: 'website', signal: 'missing-viewport', description: 'The homepage has no viewport declaration.', sourceUrl: 'https://example.test/', observedAt: '2026-01-01T00:00:00.000Z', confidence: 'confirmed' },
+    ];
+    const result = detectOpportunities({ ...base, websiteUrl: 'https://example.test', websiteStatus: 'unknown' }, evidence);
+    expect(result.opportunities.find(item => item.service === 'website')?.priority).toBe('medium');
+  });
+
 });

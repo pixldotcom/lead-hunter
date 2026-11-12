@@ -36,24 +36,18 @@ Lead Hunter prioritizes businesses with strong existing reputation and clear dig
 
 ## Phased delivery
 
-### Foundation (current branch)
-- Add website-optional business and evidence models.
-- Add independent service opportunity detection and transparent scoring.
-- Add portable ChatGPT prompt generation.
-- Add unit tests for priority and evidence behavior.
+### Delivered: foundation and first UI integration
+- Add website-optional business and evidence models, with backward-compatible optional collections in the existing discovery payload.
+- Add independent service opportunity detection, explainable scoring, and portable ChatGPT research prompts.
+- Add a Business Opportunities screen with manual entry, CSV import, conservative deduplication, Google Maps/Google search links, and website-status review.
+- Reuse the existing local analyzer when a website URL is present; businesses without a URL can still receive a metadata-based opportunity analysis.
+- Persist opportunity records through the existing cloud workspace; existing candidate and lead schemas remain unchanged.
+- Add tests for no-website records, legacy discovery payload compatibility, deduplication, and URL validation.
 
-### Integration
-- Add a migration adapter for existing discovery candidates.
-- Connect discovery/import sources to the new business model.
-- Extend the existing analyzer output into typed evidence.
-- Persist opportunity analyses in the existing cloud workspace without breaking current records or exceeding storage limits.
-
-### Product UI
-- Replace the manual-register-first discovery experience with a guided Discover workspace.
-- Add batch progress, cancellation, retry, and review queues.
-- Add opportunity cards and business detail views.
-- Add copy prompt, copy evidence bundle, and export actions.
-- Keep existing Leads, Pipeline, Follow-ups, Outreach, and PWA capabilities.
+### Next integration steps
+- Expand supported discovery imports into the business-first model.
+- Add per-business progress, richer source provenance, and evidence export, while keeping storage within the current 3 MB cloud limit.
+- Calibrate scoring weights against human-reviewed prospects before treating the score as predictive.
 
 ## Initial scoring principles
 
