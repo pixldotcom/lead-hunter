@@ -378,9 +378,22 @@ export function OpportunityWorkspace() {
   const qualificationCounts = { ready: shortlist.filter(item => item.tier === 'ready').length, research: shortlist.filter(item => item.tier === 'research').length, verify: shortlist.filter(item => item.tier === 'verify').length, analyze: shortlist.filter(item => item.tier === 'analyze').length };
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
   return <div className="opportunity-workspace">
-    <div className="pagehead"><div><i>OPPORTUNITY-FIRST DISCOVERY</i><h1>Business Opportunities</h1><p>Prioritize businesses with a strong reputation and a weak or missing website, then uncover SEO, local SEO, performance and marketing opportunities.</p></div></div>
+    <div className="pagehead"><div><i>LEAD HUNTER V2</i><h1>Opportunity workspace</h1><p>Discover businesses, analyze opportunities, qualify prospects, research, prepare outreach, and track follow-ups — all in one place.</p></div></div>
+    <nav className="v2-workflow-nav" aria-label="Opportunity workflow stages">
+      <a href="#v2-discover"><span>01</span> Discover</a>
+      <a href="#v2-import"><span>02</span> Import</a>
+      <a href="#v2-queue"><span>03</span> Analyze</a>
+      <a href="#v2-qualify"><span>04</span> Qualify & research</a>
+      <a href="#v2-followup"><span>05</span> Outreach & follow-ups</a>
+    </nav>
+    <div className="v2-overview" aria-label="Workspace overview">
+      <div><strong>{businesses.length}</strong><span>Businesses</span></div>
+      <div><strong>{analyses.length}</strong><span>Analyzed</span></div>
+      <div><strong>{qualificationCounts.ready}</strong><span>Ready for review</span></div>
+      <div><strong>{dueActivities.length}</strong><span>Follow-ups due</span></div>
+    </div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status" className="opportunity-notice">{notice}</p>}
-    <section className="panel">
+    <section id="v2-discover" className="panel">
       <div className="between"><div><h2>1. Discover businesses</h2><p>Find public business listings by category and location, then import selected prospects and optionally analyze them automatically. Ratings are not supplied by OpenStreetMap.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
       <div className="formgrid">
         <label>Business category<input value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. dentist, gym, hotel"/></label>
@@ -401,7 +414,7 @@ export function OpportunityWorkspace() {
       </>}
       <p className="muted">Supported types include dentist, restaurant, cafe, hotel, hair salon, pharmacy, beauty salon, gym, veterinary clinic, car repair, bakery, optician, real estate agency, law firm, accounting firm, travel agency, clothing store, supermarket and school. OpenStreetMap coverage varies by area.</p>
     </section>
-    <section className="panel">
+    <section id="v2-import" className="panel">
       <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div></div>
       <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
       <form onSubmit={submit}>
@@ -420,7 +433,7 @@ export function OpportunityWorkspace() {
       </form>
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
     </section>
-    <section className="panel">
+    <section id="v2-qualify" className="panel">
       <div className="between"><div><h2>3. Qualification shortlist</h2><p>Evidence-first ranking for outreach decisions. Scores are signals, not proof; no messages are sent automatically.</p></div><span className="muted">{qualificationCounts.ready} ready for review · {qualificationCounts.research} research next</span></div>
       <div className="headbuttons"><label>Qualification stage<select value={qualificationFilter} onChange={e => QualificationFilter(e.target.value as QualificationTier | 'all')}><option value="all">All ({shortlist.length})</option><option value="ready">Ready for human review ({qualificationCounts.ready})</option><option value="research">Research next ({qualificationCounts.research})</option><option value="verify">Verify details ({qualificationCounts.verify})</option><option value="analyze">Needs analysis ({qualificationCounts.analyze})</option></select></label></div>
       {!shortlisted.length && <p className="muted">No businesses in this qualification stage yet.</p>}
@@ -448,8 +461,8 @@ export function OpportunityWorkspace() {
       </article>)}</div>
       {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
     </section>
-    <section className="panel"><div className="between"><div><h2>4. Outreach follow-ups</h2><p>{outreachActivities.length} businesses tracked · {dueActivities.length} overdue follow-ups. All outreach is logged manually; no messages are sent automatically.</p></div></div>{dueActivities.length ? <div className="opportunity-list">{dueActivities.slice(0,25).map(activity => {const business=businesses.find(b=>b.id===activity.businessId);return business && <article key={activity.businessId} className="opportunity-card"><div className="between"><div><h3>{business.name}</h3><p>Follow-up due {activity.nextFollowUpAt.slice(0,10)} · {activity.stage} · {activity.channel}</p></div><button className="secondary" onClick={()=>editActivity(activity.businessId)}>Update activity</button></div>{activity.note && <p>{activity.note}</p>}{activityBusinessId === activity.businessId && <p className="muted">Edit this business's outreach activity in the qualification shortlist above.</p>}</article>})}</div> : <p className="muted">No overdue follow-ups. Use “Track outreach” on a qualified prospect to log actual contact and schedule the next action.</p>}</section>
-    <section className="panel">
+    <section id="v2-followup" className="panel"><div className="between"><div><h2>4. Outreach follow-ups</h2><p>{outreachActivities.length} businesses tracked · {dueActivities.length} overdue follow-ups. All outreach is logged manually; no messages are sent automatically.</p></div></div>{dueActivities.length ? <div className="opportunity-list">{dueActivities.slice(0,25).map(activity => {const business=businesses.find(b=>b.id===activity.businessId);return business && <article key={activity.businessId} className="opportunity-card"><div className="between"><div><h3>{business.name}</h3><p>Follow-up due {activity.nextFollowUpAt.slice(0,10)} · {activity.stage} · {activity.channel}</p></div><button className="secondary" onClick={()=>editActivity(activity.businessId)}>Update activity</button></div>{activity.note && <p>{activity.note}</p>}{activityBusinessId === activity.businessId && <p className="muted">Edit this business's outreach activity in the qualification shortlist above.</p>}</article>})}</div> : <p className="muted">No overdue follow-ups. Use “Track outreach” on a qualified prospect to log actual contact and schedule the next action.</p>}</section>
+    <section id="v2-queue" className="panel">
       <div className="between"><div><h2>5. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
       <p className="muted">Analyze up to 25 pending businesses per run. Successful results are saved individually; failed scans remain pending for retry. Keep this tab open during processing.</p>
       {queueProgress && <div className="opportunity-notice" role="status"><strong>Processing {queueProgress.done + queueProgress.failed + 1} of {queueProgress.total}</strong> · {queueProgress.current} · {queueProgress.done} saved · {queueProgress.failed} failed <progress max={queueProgress.total} value={queueProgress.done + queueProgress.failed}/></div>}
