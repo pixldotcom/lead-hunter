@@ -172,6 +172,32 @@ export function OpportunityWorkspace() {
     catch { ErrorMessage('Clipboard access was blocked. Open the analysis and copy the research prompt manually.'); }
   };
 
+  const importExistingCandidates = async () => {
+    if (!data.candidates.length) return;
+    try {
+      let nextBusinesses = [...working.current.businesses];
+      let added = 0;
+      for (const candidate of data.candidates) {
+        const record = createBusinessRecord({
+          name: candidate.review?.name.trim() || candidate.name || candidate.domain,
+          category: candidate.industry,
+          location: candidate.geography,
+          websiteUrl: candidate.website,
+          websiteStatus: 'unknown',
+          discoverySource: `Existing website prospect: ${candidate.source}`,
+        });
+        const existing = nextBusinesses.find(item => sameBusiness(item, record));
+        if (!existing) { nextBusinesses = [record, ...nextBusinesses]; added++; continue; }
+        nextBusinesses = nextBusinesses.map(item => item.id === existing.id ? {
+          ...item, category: item.category || record.category, websiteUrl: item.websiteUrl || record.websiteUrl,
+          updatedAt: new Date().toISOString(),
+        } : item);
+      }
+      await persist(nextBusinesses, working.current.analyses);
+      Notice(`${added} existing website prospects added to the opportunity workspace; ${data.candidates.length - added} matched existing businesses.`);
+    } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not import existing prospects.'); }
+  };
+
   const searchQuery = [category.trim(), location.trim()].filter(Boolean).join(' in ');
   const updateWebsiteStatus = async (business: BusinessRecord, status: WebsiteStatus) => {
     const updated = working.current.businesses.map(item => item.id === business.id ? { ...item, websiteStatus: status, updatedAt: new Date().toISOString() } : item);
@@ -184,7 +210,7 @@ export function OpportunityWorkspace() {
     <div className="pagehead"><div><i>OPPORTUNITY-FIRST DISCOVERY</i><h1>Business Opportunities</h1><p>Prioritize businesses with a strong reputation and a weak or missing website, then uncover SEO, local SEO, performance and marketing opportunities.</p></div></div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status" className="opportunity-notice">{notice}</p>}
     <section className="panel">
-      <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div>
+      <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div></div>
       <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
       <form onSubmit={submit}>
         <div className="formgrid">
