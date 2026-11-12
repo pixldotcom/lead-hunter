@@ -50,7 +50,7 @@ export function OpportunityWorkspace() {
   const [discoveryProgress, DiscoveryProgress] = useState('');
   const [queueProgress, QueueProgress] = useState<{done:number;total:number;failed:number;current:string}|null>(null);
   const [queueFailures, QueueFailures] = useState<Record<string,string>>({});
-  const [showOnlyUnanalyzed, ShowOnlyUnanalyzed] = useState(true);
+
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
   const working = useRef({ businesses, analyses });
@@ -171,7 +171,7 @@ export function OpportunityWorkspace() {
   // One bounded client-side queue shared by discovery imports and the opportunity workspace.
   // Completed analyses are saved individually; interrupted runs resume from remaining records.
   const runQueue = async (targets: BusinessRecord[]) => {
-    const pending = targets.filter(item => !working.current.analyses.some(a => a.businessId === item.id));
+    const pending = targets.filter(item => !working.current.analyses.some(a => a.businessId === item.id) || queueFailures[item.id]);
     if (!pending.length) {
       Notice('All selected businesses already have analyses. Use Re-analyze on a business to refresh its evidence.');
       return;
@@ -206,7 +206,7 @@ export function OpportunityWorkspace() {
 
   const analyzeAll = async () => {
     if (busy || !businesses.length) return;
-    const targets = showOnlyUnanalyzed ? businesses.filter(b => !analyses.some(a => a.businessId === b.id)) : businesses;
+    const targets = businesses.filter(b => !analyses.some(a => a.businessId === b.id));
     await runQueue(targets);
   };
 
@@ -343,7 +343,10 @@ export function OpportunityWorkspace() {
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
     </section>
     <section className="panel">
-      <div className="between"><div><h2>3. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze all businesses`}</button></div>
+      <div className="between"><div><h2>3. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
+      <p className="muted">Analyze up to 25 pending businesses per run. Successful results are saved individually; failed scans remain pending for retry. Keep this tab open during processing.</p>
+      {queueProgress && <div className="opportunity-notice" role="status"><strong>Processing {queueProgress.done + queueProgress.failed + 1} of {queueProgress.total}</strong> · {queueProgress.current} · {queueProgress.done} saved · {queueProgress.failed} failed <progress max={queueProgress.total} value={queueProgress.done + queueProgress.failed}/></div>}
+      {Object.keys(queueFailures).length > 0 && <div className="opportunity-notice"><div className="between"><strong>{Object.keys(queueFailures).length} businesses need attention</strong><button className="secondary" disabled={busy} onClick={() => void retryFailures()}>Retry failed analyses</button></div><ul>{businesses.filter(b => queueFailures[b.id]).slice(0,10).map(b => <li key={b.id}><b>{b.name}:</b> {queueFailures[b.id]}</li>)}</ul></div>}
       <div className="headbuttons"><label>Show<select value={filter} onChange={e => Filter(e.target.value)}><option value="all">All businesses</option><option value="no-site">No website found</option><option value="outdated">Outdated websites</option><option value="unreviewed">Not analyzed yet</option></select></label></div>
       {!visible.length && <p className="empty">No businesses in this view yet. Add a business manually or import a CSV. You can include businesses with no website.</p>}
       <div className="opportunity-list">{visible.map(business => {
@@ -352,7 +355,7 @@ export function OpportunityWorkspace() {
         return <article className="panel opportunity-card" key={business.id}>
           <div className="between"><div><h3>{business.name}</h3><p>{[business.category, business.location].filter(Boolean).join(' · ') || 'Category/location not recorded'}</p></div><label className="opportunity-status-control"><span>Website status</span><select aria-label={`Website status for ${business.name}`} value={business.websiteStatus} onChange={e => void updateWebsiteStatus(business, e.target.value as WebsiteStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
           <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">{business.websiteUrl}</a> : 'No website URL recorded'}{business.rating !== null ? ` · ★ ${business.rating}` : ''}{business.reviewCount !== null ? ` · ${business.reviewCount} reviews` : ''}{business.sourceUrl ? <> · <a href={business.sourceUrl} target="_blank" rel="noopener noreferrer">Discovery source</a></> : ''}</p>
-          <p>Discovery source: {business.discoverySource || 'Not recorded'}</p>
+          <p>Discovery source: {business.discoverySource || 'Not recorded'}</p>{queueFailures[business.id] && <p className="error" role="alert">Analysis needs retry: {queueFailures[business.id]}</p>}
           {analysis ? <><div className="opportunity-score"><strong>Opportunity score: {analysis.totalScore}/100</strong><span>Reputation: {analysis.reputationScore}/100 · Evidence confidence: {analysis.evidenceConfidence}%</span></div><ul className="opportunity-signals">{top.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority}</b> — {item.rationale}</li>)}</ul><details><summary>Evidence and research brief</summary><h4>All service areas</h4><ul className="opportunity-signals">{analysis.opportunities.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority} ({item.score}/100)</b> — {item.rationale}</li>)}</ul><p>{analysis.evidence.length ? `${analysis.evidence.length} evidence items collected.` : 'No technical evidence collected. This analysis is based on business information only.'}</p>{analysis.evidence.map(item => <p key={item.id}><b>[{item.confidence}] {item.signal}</b> — {item.description} {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}<textarea readOnly rows={12} value={analysis.researchPrompt}/><button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button><h4>Research findings</h4>{analysis.researchNotes ? <><p>{analysis.researchNotes.summary}</p><p className="muted">Imported {new Date(analysis.researchNotes.importedAt).toLocaleString()}; source claims are unverified.</p><ul>{analysis.researchNotes.facts.map((fact, i) => <li key={i}>{fact.claim} — <a href={fact.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a></li>)}</ul>{analysis.researchNotes.hypotheses.length > 0 && <p>Hypotheses: {analysis.researchNotes.hypotheses.join(' · ')}</p>}{analysis.researchNotes.unknowns.length > 0 && <p>Unknowns: {analysis.researchNotes.unknowns.join(' · ')}</p>}{analysis.researchNotes.nextSteps.length > 0 && <p>Next steps: {analysis.researchNotes.nextSteps.join(' · ')}</p>}</> : <p className="muted">No research findings imported.</p>}<button className="secondary" onClick={() => { ResearchBusiness(business.id); ResearchJson(''); }}>Paste research JSON</button></details></> : <p className="muted">Not analyzed yet. Website scans use the existing local analyzer; no paid API or AI service is called.</p>}
           <div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Re-analyze' : 'Analyze opportunity'}</button>{analysis && <button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button>}{analysis && !analysis.researchNotes && <button className="secondary" onClick={() => {ResearchBusiness(business.id); ResearchJson('');}}>Import research findings</button>}</div>{researchBusinessId === business.id && <div><label>Paste structured research JSON<textarea rows={8} value={researchJson} onChange={e => ResearchJson(e.target.value)} placeholder={'{"summary":"...","facts":[{"claim":"...","sourceUrl":"https://..."}],"hypotheses":[],"unknowns":[],"nextSteps":[]}'}/></label><div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void saveResearch(business.id)}>Validate and save research</button><button className="secondary" onClick={() => ResearchBusiness('')}>Cancel</button></div></div>}
         </article>;
