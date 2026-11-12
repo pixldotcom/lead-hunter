@@ -10,6 +10,13 @@ describe('opportunity business persistence', () => {
     expect(notes.importedAt).toBe('2026-11-12T00:00:00.000Z');
   });
 
+  it('accepts JSON code fences from ChatGPT without weakening source checks', () => {
+    const payload = JSON.stringify({ summary: 'Checked sources', facts: [{claim:'Public opening hours',sourceUrl:'https://example.org/hours'}], hypotheses: [], unknowns: [], nextSteps: [] });
+    const notes = parseImportedResearch('\\`\\`\\`json\\n' + payload + '\\n\\`\\`\\`');
+    expect(notes.facts).toHaveLength(1);
+    expect(() => parseImportedResearch('\\`\\`\\`json\\n' + JSON.stringify({summary:'Unsupported',facts:[{claim:'Claim',sourceUrl:''}]}) + '\\n\\`\\`\\`')).toThrow(/source URL/);
+  });
+
   it('rejects research claims without an HTTP source and oversized input', () => {
     expect(() => parseImportedResearch(JSON.stringify({ summary: 'Summary', facts: [{ claim: 'Unverified', sourceUrl: '' }] }))).toThrow(/source URL/);
     expect(() => parseImportedResearch('x'.repeat(20001))).toThrow(/20 KB/);
