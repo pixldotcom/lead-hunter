@@ -26,7 +26,11 @@ export function mergeCloud(target:CloudData,source:CloudData,useSourcePreference
  const businessMap=new Map<string,string>(),businesses=[...(next.discovery.businesses??[])],analyses=[...(next.discovery.opportunityAnalyses??[])],businessIds=new Set(businesses.map(b=>b.id));
  for(const business of normalizedSource.discovery.businesses??[]){
   const existing=businesses.find(item=>sameBusiness(item,business));
-  if(existing){businessMap.set(business.id,existing.id);continue}
+  if(existing){
+   businessMap.set(business.id,existing.id);
+   const merged={...existing,category:existing.category||business.category,websiteUrl:existing.websiteUrl||business.websiteUrl,websiteStatus:existing.websiteStatus==='unknown'?business.websiteStatus:existing.websiteStatus,rating:existing.rating??business.rating,reviewCount:existing.reviewCount??business.reviewCount,phone:existing.phone||business.phone,email:existing.email||business.email,profiles:[...new Set([...existing.profiles,...business.profiles])],sourceUrl:existing.sourceUrl||business.sourceUrl,discoverySource:existing.discoverySource||business.discoverySource,updatedAt:existing.updatedAt};
+   businesses[businesses.findIndex(item=>item.id===existing.id)]=merged;continue
+  }
   const id=businessIds.has(business.id)?uid():business.id;businessIds.add(id);businessMap.set(business.id,id);businesses.push({...business,id});addedBusinesses++;
  }
  const analyzedIds=new Set(analyses.map(item=>item.businessId));
