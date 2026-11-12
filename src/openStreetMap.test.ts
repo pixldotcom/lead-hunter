@@ -19,11 +19,16 @@ describe('OpenStreetMap discovery', () => {
     expect(rows[0].sourceUrl).toBe('https://www.openstreetmap.org/node/7');
   });
 
-  it('caps results and reports rate limiting without retrying automatically', async () => {
+  it('caps results and retries temporary errors on a second free endpoint', async () => {
     const elements = Array.from({ length: 105 }, (_, id) => ({ type: 'node' as const, id, tags: { name: `Business ${id}` } }));
     expect(parseOverpassBusinesses({ elements }, 'dentist', 'Ludhiana')).toHaveLength(100);
-    const fetcher = vi.fn().mockResolvedValue(new Response('', { status: 429 }));
-    await expect(searchOpenStreetMap('dentist', 'Ludhiana', fetcher)).rejects.toThrow(/busy/);
-    expect(fetcher).toHaveBeenCalledOnce();
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response('', { status: 429 })).mockResolvedValueOnce(new Response(JSON.stringify({elements:[elements[0]]}), {status:200,headers:{'content-type':'application/json'}}));
+    await expect(searchOpenStreetMap('dentist', 'Ludhiana', fetcher)).resolves.toHaveLength(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('reports when every public endpoint is unavailable', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response('', {status:503}));
+    await expect(searchOpenStreetMap('dentist','Ludhiana',fetcher)).rejects.toThrow(/All free OpenStreetMap endpoints failed/);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
