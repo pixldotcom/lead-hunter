@@ -12,9 +12,9 @@ describe('opportunity business persistence', () => {
 
   it('accepts JSON code fences from ChatGPT without weakening source checks', () => {
     const payload = JSON.stringify({ summary: 'Checked sources', facts: [{claim:'Public opening hours',sourceUrl:'https://example.org/hours'}], hypotheses: [], unknowns: [], nextSteps: [] });
-    const notes = parseImportedResearch('\\`\\`\\`json\\n' + payload + '\\n\\`\\`\\`');
+    const notes = parseImportedResearch('\`\`\`json\\n' + payload + '\\n\`\`\`');
     expect(notes.facts).toHaveLength(1);
-    expect(() => parseImportedResearch('\\`\\`\\`json\\n' + JSON.stringify({summary:'Unsupported',facts:[{claim:'Claim',sourceUrl:''}]}) + '\\n\\`\\`\\`')).toThrow(/source URL/);
+    expect(() => parseImportedResearch('\`\`\`json\\n' + JSON.stringify({summary:'Unsupported',facts:[{claim:'Claim',sourceUrl:''}]}) + '\\n\`\`\`')).toThrow(/source URL/);
   });
 
   it('rejects research claims without an HTTP source and oversized input', () => {
