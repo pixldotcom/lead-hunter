@@ -27,6 +27,6 @@ describe('opportunity business persistence', () => {
   });
 
   it('rejects unsupported website protocols', () => {
-    expect(() => createBusinessRecord({ name: 'Example', websiteUrl: 'javascript:alert(1)' })).toThrow(/HTTP or HTTPS/);
+    expect(() => createBusinessRecord({ name: 'Example', websiteUrl: 'javascript:alert(1)' })).toThrow(/http:\/\/ or https:\/\//i);
   });
 });
