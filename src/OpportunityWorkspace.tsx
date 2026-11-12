@@ -6,6 +6,7 @@ import { readEvidence } from './discovery';
 import { detectOpportunities, prioritizedOpportunities } from './opportunityDetection';
 import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
 import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } from './opportunityModel';
+import { searchOpenStreetMap, type OSMBusiness } from './openStreetMap';
 
 const statusLabels: Record<WebsiteStatus, string> = {
   no_website_found: 'No website found',
@@ -43,6 +44,7 @@ export function OpportunityWorkspace() {
   const [error, ErrorMessage] = useState('');
   const [researchBusinessId, ResearchBusiness] = useState('');
   const [researchJson, ResearchJson] = useState('');
+  const [osmResults, OSMResults] = useState<OSMBusiness[]>([]);
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
   const working = useRef({ businesses, analyses });
@@ -195,6 +197,26 @@ export function OpportunityWorkspace() {
     } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not save research.'); }
   };
 
+  const searchOSM = async () => {
+    Busy(true); ErrorMessage(''); Notice('Searching OpenStreetMap…'); OSMResults([]);
+    try { const results = await searchOpenStreetMap(category, location); OSMResults(results); Notice(`${results.length} OpenStreetMap candidates found. Review the source links before importing.`); }
+    catch (e) { ErrorMessage(e instanceof Error ? e.message : 'OpenStreetMap search failed.'); Notice(''); }
+    finally { Busy(false); }
+  };
+
+  const importOSM = async () => {
+    try {
+      let nextBusinesses = [...working.current.businesses], added = 0;
+      for (const row of osmResults) {
+        const record = createBusinessRecord(row);
+        if (nextBusinesses.some(item => sameBusiness(item, record))) continue;
+        nextBusinesses = [record, ...nextBusinesses]; added++;
+      }
+      await persist(nextBusinesses);
+      Notice(`${added} businesses imported; ${osmResults.length - added} duplicates skipped. OpenStreetMap does not provide reputation ratings.`); OSMResults([]);
+    } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not import OpenStreetMap results.'); }
+  };
+
   const importExistingCandidates = async () => {
     if (!data.candidates.length) return;
     try {
@@ -235,6 +257,12 @@ export function OpportunityWorkspace() {
   return <div className="opportunity-workspace">
     <div className="pagehead"><div><i>OPPORTUNITY-FIRST DISCOVERY</i><h1>Business Opportunities</h1><p>Prioritize businesses with a strong reputation and a weak or missing website, then uncover SEO, local SEO, performance and marketing opportunities.</p></div></div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status" className="opportunity-notice">{notice}</p>}
+    <section className="panel">
+      <h2>Discover from OpenStreetMap</h2><p>Search public OpenStreetMap listings by a supported business type and city. Results are candidate listings, not verified businesses; ratings and review counts remain unknown. Respect OpenStreetMap usage policies and avoid repeated searches.</p>
+      <div className="headbuttons"><button className="primary" disabled={busy || !category.trim() || !location.trim()} onClick={() => void searchOSM()}>Search OpenStreetMap</button></div>
+      {osmResults.length > 0 && <><p>{osmResults.length} candidates · up to 100 shown · {osmResults.filter(row => row.websiteUrl).length} have a listed website</p><div className="opportunity-list">{osmResults.slice(0, 20).map((row, i) => <p key={`${row.sourceUrl}-${i}`}><b>{row.name}</b> · {row.location}{row.websiteUrl && <> · <a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">Website</a></>} · <a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">OSM source</a></p>)}</div><button className="primary" disabled={busy} onClick={() => void importOSM()}>Import {osmResults.length} candidates</button><button className="secondary" onClick={() => OSMResults([])}>Discard results</button></>}
+      <p className="muted">Supported types include dentist, restaurant, cafe, hotel, hair salon, pharmacy, beauty salon, gym, veterinary clinic, car repair, bakery, optician, real estate agency, law firm, accounting firm, travel agency, clothing store, supermarket and school.</p>
+    </section>
     <section className="panel">
       <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div></div>
       <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
