@@ -172,6 +172,12 @@ export function OpportunityWorkspace() {
     catch { ErrorMessage('Clipboard access was blocked. Open the analysis and copy the research prompt manually.'); }
   };
 
+  const searchQuery = [category.trim(), location.trim()].filter(Boolean).join(' in ');
+  const updateWebsiteStatus = async (business: BusinessRecord, status: WebsiteStatus) => {
+    const updated = working.current.businesses.map(item => item.id === business.id ? { ...item, websiteStatus: status, updatedAt: new Date().toISOString() } : item);
+    try { await persist(updated, working.current.analyses.filter(item => item.businessId !== business.id)); Notice('Website status updated. Re-analyze to refresh the opportunity score.'); }
+    catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not update website status.'); }
+  };
   const visible = businesses.filter(business => filter === 'all' || filter === 'no-site' && business.websiteStatus === 'no_website_found' || filter === 'outdated' && business.websiteStatus === 'outdated' || filter === 'unreviewed' && !analyses.some(a => a.businessId === business.id));
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
   return <div className="opportunity-workspace">
@@ -192,7 +198,7 @@ export function OpportunityWorkspace() {
           <label>Public phone (optional)<input value={phone} onChange={e => Phone(e.target.value)} placeholder="Business phone"/></label>
           <label>Source URL (optional)<input value={sourceUrl} onChange={e => Source(e.target.value)} placeholder="https://listing-or-profile.example"/></label>
         </div>
-        <div className="headbuttons"><button className="primary" type="submit">Save business</button><button className="secondary" type="button" onClick={() => navigator.clipboard.writeText(csvTemplate).then(() => Notice('CSV template copied.')).catch(() => ErrorMessage('Could not copy CSV template.'))}>Copy CSV template</button></div>
+        <div className="headbuttons"><button className="primary" type="submit">Save business</button><button className="secondary" type="button" onClick={() => navigator.clipboard.writeText(csvTemplate).then(() => Notice('CSV template copied.')).catch(() => ErrorMessage('Could not copy CSV template.'))}>Copy CSV template</button>{searchQuery && <><a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Search Google Maps</a><a className="secondary" href={`https://www.google.com/search?q=${encodeURIComponent(searchQuery + ' business')}`} target="_blank" rel="noopener noreferrer">Search Google</a></>}</div>
       </form>
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
     </section>
@@ -204,8 +210,8 @@ export function OpportunityWorkspace() {
         const analysis = analyses.find(item => item.businessId === business.id);
         const top = analysis ? prioritizedOpportunities(analysis).filter(item => item.priority !== 'unverified').slice(0, 3) : [];
         return <article className="panel opportunity-card" key={business.id}>
-          <div className="between"><div><h3>{business.name}</h3><p>{[business.category, business.location].filter(Boolean).join(' · ') || 'Category/location not recorded'}</p></div><span className={`website-status status-${business.websiteStatus}`}>{statusLabels[business.websiteStatus]}</span></div>
-          <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">{business.websiteUrl}</a> : 'No website URL recorded'}{business.rating !== null ? ` · ★ ${business.rating}` : ''}{business.reviewCount !== null ? ` · ${business.reviewCount} reviews` : ''}</p>
+          <div className="between"><div><h3>{business.name}</h3><p>{[business.category, business.location].filter(Boolean).join(' · ') || 'Category/location not recorded'}</p></div><label className="opportunity-status-control"><span>Website status</span><select aria-label={`Website status for ${business.name}`} value={business.websiteStatus} onChange={e => void updateWebsiteStatus(business, e.target.value as WebsiteStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+          <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">{business.websiteUrl}</a> : 'No website URL recorded'}{business.rating !== null ? ` · ★ ${business.rating}` : ''}{business.reviewCount !== null ? ` · ${business.reviewCount} reviews` : ''}{business.sourceUrl ? <> · <a href={business.sourceUrl} target="_blank" rel="noopener noreferrer">Discovery source</a></> : ''}</p>
           {analysis ? <><div className="opportunity-score"><strong>Opportunity score: {analysis.totalScore}/100</strong><span>Evidence confidence: {analysis.evidenceConfidence}%</span></div><ul className="opportunity-signals">{top.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority}</b> — {item.rationale}</li>)}</ul><details><summary>Evidence and research brief</summary><p>{analysis.evidence.length ? `${analysis.evidence.length} evidence items collected.` : 'No technical evidence collected. This analysis is based on business information only.'}</p>{analysis.evidence.map(item => <p key={item.id}><b>[{item.confidence}] {item.signal}</b> — {item.description} {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}<textarea readOnly rows={12} value={analysis.researchPrompt}/><button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button></details></> : <p className="muted">Not analyzed yet. Website scans use the existing local analyzer; no paid API or AI service is called.</p>}
           <div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Re-analyze' : 'Analyze opportunity'}</button></div>
         </article>;
