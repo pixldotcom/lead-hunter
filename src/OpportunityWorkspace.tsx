@@ -9,6 +9,7 @@ import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } 
 import { searchOpenStreetMap, type OSMBusiness } from './openStreetMap';
 import { buildQualifiedShortlist, buildProspectBrief, type QualificationTier } from './prospectQualification';
 import { prepareOutreach, type OutreachChannel } from './outreachPreparation';
+import { OUTREACH_STAGES, followUpStatus, upsertOutreachActivity, type OutreachActivity, type OutreachStage } from './outreachTracking';
 
 const statusLabels: Record<WebsiteStatus, string> = {
   no_website_found: 'No website found',
@@ -31,6 +32,7 @@ export function OpportunityWorkspace() {
   const data = cloud.snapshot.data.discovery;
   const businesses = data.businesses ?? [];
   const analyses = data.opportunityAnalyses ?? [];
+  const outreachActivities = data.outreachActivities ?? [];
   const [name, Name] = useState('');
   const [category, Category] = useState('');
   const [location, Location] = useState('');
@@ -46,6 +48,12 @@ export function OpportunityWorkspace() {
   const [outreachChannel, OutreachChannelInput] = useState<OutreachChannel>('email');
   const [outreachDraft, OutreachDraft] = useState('');
   const [outreachApproved, OutreachApproved] = useState(false);
+  const [activityBusinessId, ActivityBusiness] = useState('');
+  const [activityStage, ActivityStage] = useState<OutreachStage>('drafted');
+  const [activityChannel, ActivityChannel] = useState<OutreachChannel>('email');
+  const [activityLastContact, ActivityLastContact] = useState('');
+  const [activityNextFollowUp, ActivityNextFollowUp] = useState('');
+  const [activityNote, ActivityNote] = useState('');
   const [busy, Busy] = useState(false);
   const [notice, Notice] = useState('');
   const [error, ErrorMessage] = useState('');
@@ -223,6 +231,32 @@ export function OpportunityWorkspace() {
     await runQueue(failed);
   };
 
+  const editActivity = (businessId: string) => {
+    const existing = outreachActivities.find(a => a.businessId === businessId);
+    ActivityBusiness(businessId);
+    ActivityStage(existing?.stage ?? 'drafted');
+    ActivityChannel(existing?.channel ?? 'email');
+    ActivityLastContact(existing?.lastContactAt ? existing.lastContactAt.slice(0,10) : '');
+    ActivityNextFollowUp(existing?.nextFollowUpAt ? existing.nextFollowUpAt.slice(0,10) : '');
+    ActivityNote(existing?.note ?? '');
+  };
+
+  const saveActivity = async () => {
+    if (!activityBusinessId || busy) return;
+    const toStamp = (value: string) => value ? new Date(`${value}T12:00:00.000Z`).toISOString() : '';
+    try {
+      if (activityNote.length > 2000) throw Error('Notes must be under 2,000 characters.');
+      if (activityStage !== 'drafted' && !activityLastContact && activityStage !== 'closed') throw Error('Record the actual contact date before changing the outreach stage.');
+      const activity: OutreachActivity = {businessId:activityBusinessId,stage:activityStage,channel:activityChannel,lastContactAt:toStamp(activityLastContact),nextFollowUpAt:toStamp(activityNextFollowUp),note:activityNote,updatedAt:new Date().toISOString()};
+      Busy(true); ErrorMessage('');
+      const current = cloud.snapshot.data.discovery;
+      const next = {...current,outreachActivities:upsertOutreachActivity(current.outreachActivities ?? [],activity)};
+      if (!await cloud.change('discovery',next)) throw Error('Cloud save failed; outreach status was not changed.');
+      ActivityBusiness(''); Notice('Outreach status and follow-up saved. No message was sent.');
+    } catch(e) {ErrorMessage(e instanceof Error ? e.message : 'Could not save outreach status.');}
+    finally {Busy(false);}
+  };
+
   const openOutreach = (prospect: ReturnType<typeof buildQualifiedShortlist>[number]) => {
     const channel: OutreachChannel = prospect.business.email ? 'email' : prospect.business.phone ? 'phone' : 'contact_form';
     OutreachBusiness(prospect.business.id);
@@ -338,6 +372,8 @@ export function OpportunityWorkspace() {
     return score || (b.rating ?? -1) - (a.rating ?? -1) || (b.reviewCount ?? -1) - (a.reviewCount ?? -1) || a.name.localeCompare(b.name);
   });
   const shortlist = buildQualifiedShortlist(businesses, analyses);
+  const activityByBusiness = new Map(outreachActivities.map(a => [a.businessId,a]));
+  const dueActivities = outreachActivities.filter(a => followUpStatus(a) === 'overdue').sort((a,b)=>a.nextFollowUpAt.localeCompare(b.nextFollowUpAt));
   const shortlisted = shortlist.filter(item => qualificationFilter === 'all' || item.tier === qualificationFilter);
   const qualificationCounts = { ready: shortlist.filter(item => item.tier === 'ready').length, research: shortlist.filter(item => item.tier === 'research').length, verify: shortlist.filter(item => item.tier === 'verify').length, analyze: shortlist.filter(item => item.tier === 'analyze').length };
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
@@ -392,7 +428,9 @@ export function OpportunityWorkspace() {
         <div className="between"><div><h3>{item.business.name}</h3><p>{[item.business.category,item.business.location].filter(Boolean).join(' · ')}</p></div><strong>{item.tier === 'ready' ? 'Ready for human review' : item.tier === 'research' ? 'Research next' : item.tier === 'verify' ? 'Verify details' : 'Needs analysis'}</strong></div>
         <p>{item.reason}</p><p><strong>Opportunity score:</strong> {item.analysis?.totalScore ?? 'Not analyzed'} · <strong>Best service:</strong> {item.recommendedService?.replace('_',' ') ?? 'Not verified'}</p>
         {item.missing.length > 0 && <p className="muted">Missing: {item.missing.join(' · ')}</p>}
-        <div className="headbuttons">{item.analysis && <button className="secondary" onClick={() => void copyPrompt(item.analysis!.researchPrompt)}>Copy research prompt</button>}<button className="secondary" onClick={() => void copyPrompt(buildProspectBrief(item))}>Copy qualification brief</button><button className="primary" onClick={() => openOutreach(item)}>Prepare outreach</button>{item.business.sourceUrl && <a className="secondary" href={item.business.sourceUrl} target="_blank" rel="noopener noreferrer">Check source</a>}</div>
+        {activityByBusiness.get(item.business.id) && <p><strong>Outreach:</strong> {activityByBusiness.get(item.business.id)!.stage} · {followUpStatus(activityByBusiness.get(item.business.id)!) === 'overdue' ? 'Follow-up overdue' : activityByBusiness.get(item.business.id)!.nextFollowUpAt ? 'Follow-up '+activityByBusiness.get(item.business.id)!.nextFollowUpAt.slice(0,10) : 'No follow-up scheduled'}</p>}
+        <div className="headbuttons"><button className="secondary" onClick={() => editActivity(item.business.id)}>Track outreach</button>{item.analysis && <button className="secondary" onClick={() => void copyPrompt(item.analysis!.researchPrompt)}>Copy research prompt</button>}<button className="secondary" onClick={() => void copyPrompt(buildProspectBrief(item))}>Copy qualification brief</button><button className="primary" onClick={() => openOutreach(item)}>Prepare outreach</button>{item.business.sourceUrl && <a className="secondary" href={item.business.sourceUrl} target="_blank" rel="noopener noreferrer">Check source</a>}</div>
+        {activityBusinessId === item.business.id && <div className="opportunity-notice"><h4>Outreach activity</h4><p className="muted">Record what actually happened. Preparing or copying a draft does not count as contacting a business.</p><div className="formgrid"><label>Stage<select value={activityStage} onChange={e=>ActivityStage(e.target.value as OutreachStage)}>{OUTREACH_STAGES.map(stage=><option key={stage} value={stage}>{stage}</option>)}</select></label><label>Channel<select value={activityChannel} onChange={e=>ActivityChannel(e.target.value as OutreachChannel)}><option value="email">Email</option><option value="phone">Phone</option><option value="contact_form">Contact form</option></select></label><label>Last actual contact<input type="date" value={activityLastContact} onChange={e=>ActivityLastContact(e.target.value)}/></label><label>Next follow-up<input type="date" value={activityNextFollowUp} onChange={e=>ActivityNextFollowUp(e.target.value)}/></label></div><label>Notes<textarea rows={3} maxLength={2000} value={activityNote} onChange={e=>ActivityNote(e.target.value)} placeholder="Outcome, next action, consent or opt-out details"/></label><div className="headbuttons"><button className="primary" disabled={busy} onClick={()=>void saveActivity()}>Save outreach activity</button><button className="secondary" onClick={()=>ActivityBusiness('')}>Cancel</button></div></div>}
         {outreachBusinessId === item.business.id && (() => {
           const kit = prepareOutreach(item,outreachChannel);
           return <div className="opportunity-notice"><h4>Human-reviewed outreach studio</h4><p className="muted">Draft only. Nothing is sent or scheduled. Check the business, sources, contact permission, and local outreach rules before using this text.</p>
@@ -410,8 +448,9 @@ export function OpportunityWorkspace() {
       </article>)}</div>
       {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
     </section>
+    <section className="panel"><div className="between"><div><h2>4. Outreach follow-ups</h2><p>{outreachActivities.length} businesses tracked · {dueActivities.length} overdue follow-ups. All outreach is logged manually; no messages are sent automatically.</p></div></div>{dueActivities.length ? <div className="opportunity-list">{dueActivities.slice(0,25).map(activity => {const business=businesses.find(b=>b.id===activity.businessId);return business && <article key={activity.businessId} className="opportunity-card"><div className="between"><div><h3>{business.name}</h3><p>Follow-up due {activity.nextFollowUpAt.slice(0,10)} · {activity.stage} · {activity.channel}</p></div><button className="secondary" onClick={()=>editActivity(activity.businessId)}>Update activity</button></div>{activity.note && <p>{activity.note}</p>}{activityBusinessId === activity.businessId && <p className="muted">Edit this business's outreach activity in the qualification shortlist above.</p>}</article>})}</div> : <p className="muted">No overdue follow-ups. Use “Track outreach” on a qualified prospect to log actual contact and schedule the next action.</p>}</section>
     <section className="panel">
-      <div className="between"><div><h2>3. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
+      <div className="between"><div><h2>5. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
       <p className="muted">Analyze up to 25 pending businesses per run. Successful results are saved individually; failed scans remain pending for retry. Keep this tab open during processing.</p>
       {queueProgress && <div className="opportunity-notice" role="status"><strong>Processing {queueProgress.done + queueProgress.failed + 1} of {queueProgress.total}</strong> · {queueProgress.current} · {queueProgress.done} saved · {queueProgress.failed} failed <progress max={queueProgress.total} value={queueProgress.done + queueProgress.failed}/></div>}
       {Object.keys(queueFailures).length > 0 && <div className="opportunity-notice"><div className="between"><strong>{Object.keys(queueFailures).length} businesses need attention</strong><button className="secondary" disabled={busy} onClick={() => void retryFailures()}>Retry failed analyses</button></div><ul>{businesses.filter(b => queueFailures[b.id]).slice(0,10).map(b => <li key={b.id}><b>{b.name}:</b> {queueFailures[b.id]}</li>)}</ul></div>}
