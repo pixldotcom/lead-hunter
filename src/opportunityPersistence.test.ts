@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyDiscovery, validateDiscovery } from './discovery';
+import { emptyDiscovery, validateDiscovery, type DiscoveryData } from './discovery';
 import { createBusinessRecord, parseBusinessCsv, sameBusiness } from './opportunityPersistence';
 
 describe('opportunity business persistence', () => {
@@ -12,9 +12,10 @@ describe('opportunity business persistence', () => {
   });
 
   it('keeps legacy discovery payloads valid and adds empty opportunity collections', () => {
-    const legacy = emptyDiscovery();
-    const { businesses, opportunityAnalyses, ...oldShape } = legacy;
-    const migrated = validateDiscovery(oldShape);
+    const legacy: DiscoveryData = { ...emptyDiscovery() };
+    delete legacy.businesses;
+    delete legacy.opportunityAnalyses;
+    const migrated = validateDiscovery(legacy);
     expect(migrated.businesses).toEqual([]);
     expect(migrated.opportunityAnalyses).toEqual([]);
   });
