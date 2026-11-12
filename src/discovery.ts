@@ -4,6 +4,7 @@ import {normalizeDomain,parseCsv,uid,makeLead,today,salesMetrics,type Lead,type 
 import {validateLead} from './dataValidation.ts';
 import type {BusinessRecord,OpportunityAnalysis} from './opportunityModel.ts';
 import {normalizeOpportunityData} from './opportunityPersistence.ts';
+import {validateOutreachActivities,type OutreachActivity} from './outreachTracking.ts';
 
 export const DISCOVERY_KEY='pixldot-discovery-v1';
 export const SERVICES=['WordPress development','Elementor implementation','Website redesign','Website fixes','Performance optimization','WordPress maintenance','Technical SEO improvements','Next.js frontend implementation'];
@@ -15,8 +16,8 @@ export type Decision='Unreviewed'|'High priority'|'Review later'|'Not a fit'|'Al
 export const DECISIONS:Decision[]=['Unreviewed','High priority','Review later','Not a fit','Already contacted','Rejected'];
 export type Candidate={searchEvidence?:SearchResult;manualReview?:ManualReview;history:{kind:'Qualified'|'Concept created'|'Message reviewed';timestamp:string}[];id:string;domain:string;website:string;name:string;type:Preferences['type'];industry:string;geography:string;source:string;discoveredAt:string;batchId:string;status:'Pending'|'Scanning'|'Scanned'|'Error';decision:Decision;attemptedAt:string;error:string;evidence:Evidence|null;review:Review|null;qualifiedAt:string;deepReviewedAt:string;screenshot:{url:string;capturedAt:string;note:string}|null;conceptAt:string;leadId:string;messageReviewedAt:string};
 export type Batch={id:string;createdAt:string;submitted:number;duplicates:number;accepted:number};
-export type DiscoveryData={version:1;preferences:Preferences;candidates:Candidate[];batches:Batch[];businesses?:BusinessRecord[];opportunityAnalyses?:OpportunityAnalysis[]};
-export const emptyDiscovery=():DiscoveryData=>({version:1,preferences:defaultPreferences(),candidates:[],batches:[],businesses:[],opportunityAnalyses:[]});
+export type DiscoveryData={version:1;preferences:Preferences;candidates:Candidate[];batches:Batch[];businesses?:BusinessRecord[];opportunityAnalyses?:OpportunityAnalysis[];outreachActivities?:OutreachActivity[]};
+export const emptyDiscovery=():DiscoveryData=>({version:1,preferences:defaultPreferences(),candidates:[],batches:[],businesses:[],opportunityAnalyses:[],outreachActivities:[]});
 export function candidateUrl(raw:string):string{
  const input=raw.trim();if(!input||/[\s\\]/.test(input))throw Error('Enter a valid HTTP/HTTPS candidate URL.');
  const u=new URL(/^[a-z][a-z\d+.-]*:/i.test(input)?input:`https://${input}`);
@@ -60,7 +61,8 @@ export function validateDiscovery(raw:unknown):DiscoveryData{
   if(c.qualifiedAt&&qualificationProblems(c).length)throw Error('Qualified candidate lacks required evidence.');
   if(c.conceptAt&&!c.qualifiedAt)throw Error('Proposal concept needs qualification.');
  }
- return normalizeOpportunityData(raw as DiscoveryData);
+ const normalized=normalizeOpportunityData(raw as DiscoveryData);
+ return {...normalized,outreachActivities:validateOutreachActivities(raw.outreachActivities,normalized.businesses)};
 }
 export type CandidateInput={website:string;name?:string;source?:string;discoveredAt?:string;searchEvidence?:SearchResult;manualReview?:ManualReview;decision?:Decision};
 export function parseCandidates(input:string,csv=false):CandidateInput[]{
