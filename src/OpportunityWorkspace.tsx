@@ -163,13 +163,14 @@ export function OpportunityWorkspace() {
     const targets = (pendingBusinesses.length ? pendingBusinesses : businesses).slice(0, batchSize);
     cancelBatch.current = false;
     Busy(true); ErrorMessage('');
-    let completed = 0;
+    let completed = 0, failed = false;
     for (const business of targets) {
       if (cancelBatch.current) break;
       try { await analyze(business); completed++; Notice(`Analyzed ${completed} of ${targets.length} in this batch.`); }
-      catch (e) { ErrorMessage(`${business.name}: ${e instanceof Error ? e.message : 'analysis failed'}`); break; }
+      catch (e) { failed = true; ErrorMessage(`${business.name}: ${e instanceof Error ? e.message : 'analysis failed'}`); break; }
     }
-    Notice(cancelBatch.current ? `Stopped after ${completed} businesses. Saved analyses are retained; run the next batch when ready.` : `Batch complete: ${completed} businesses analyzed. Review the ranked opportunities below.`);
+    if (cancelBatch.current) Notice(`Stopped after ${completed} businesses. Saved analyses are retained; run the next batch when ready.`);
+    else if (!failed) Notice(`Batch complete: ${completed} businesses analyzed. Review the ranked opportunities below.`);
     Busy(false);
   };
 
