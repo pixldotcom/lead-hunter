@@ -18,11 +18,14 @@ export function detectOpportunities(business: BusinessRecord, evidence: Opportun
     if (service === 'website') {
       if (business.websiteStatus === 'no_website_found') {
         score = Math.max(score, 85);
-        rationale = 'No official website was found during discovery. Verify ownership and search coverage before outreach.';
+        rationale = 'No official website was found during discovery. Verify the business identity and search coverage before outreach; absence from a source is not proof that no website exists.';
       } else if (business.websiteStatus === 'outdated') {
         score = Math.max(score, 90);
-        rationale = 'The website has been classified as outdated based on recorded website evidence.';
-      } else if (business.websiteStatus === 'unknown') {
+        rationale = 'A reviewer marked this website as outdated. Verify the assessment and record concrete examples before outreach.';
+      } else if (business.websiteStatus === 'needs_improvement') {
+        score = Math.max(score, 65);
+        rationale = 'A reviewer marked this website as needing improvement. Verify the specific issue and capture evidence before outreach.';
+      } else if (business.websiteStatus === 'unknown' && !matching.length) {
         score = Math.min(score, 15);
       }
     }
