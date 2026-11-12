@@ -48,6 +48,9 @@ export function OpportunityWorkspace() {
   const [selectedOSM, SelectedOSM] = useState<string[]>([]);
   const [autoAnalyzeOSM, AutoAnalyzeOSM] = useState(true);
   const [discoveryProgress, DiscoveryProgress] = useState('');
+  const [queueProgress, QueueProgress] = useState<{done:number;total:number;failed:number;current:string}|null>(null);
+  const [queueFailures, QueueFailures] = useState<Record<string,string>>({});
+  const [showOnlyUnanalyzed, ShowOnlyUnanalyzed] = useState(true);
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
   const working = useRef({ businesses, analyses });
@@ -145,11 +148,13 @@ export function OpportunityWorkspace() {
           current = { ...current, websiteStatus: 'needs_improvement', updatedAt: new Date().toISOString() };
         }
       } catch (e) {
-        ErrorMessage(`Website scan unavailable for ${business.name}: ${e instanceof Error ? e.message : 'scan failed'}. The saved analysis uses only recorded business information.`);
+        throw new Error(`Website scan failed for ${business.name}: ${e instanceof Error ? e.message : 'scan failed'}. No new analysis was saved; retry later or verify the website URL.`);
       }
     }
     const analysis = detectOpportunities(current, evidence);
     const nextBusinesses = working.current.businesses.map(item => item.id === current.id ? current : item);
+    const previous = working.current.analyses.find(item => item.businessId === current.id);
+    if (previous?.researchNotes) analysis.researchNotes = previous.researchNotes;
     const nextAnalyses = [...working.current.analyses.filter(item => item.businessId !== current.id), analysis];
     await persist(nextBusinesses, nextAnalyses);
     return analysis;
@@ -158,31 +163,57 @@ export function OpportunityWorkspace() {
   const analyzeOne = async (business: BusinessRecord) => {
     if (busy) return;
     Busy(true); ErrorMessage(''); Notice(`Analyzing ${business.name}…`);
-    try { await analyze(business); Notice(`Analysis saved for ${business.name}. Review the evidence and generated research prompt before deciding.`); }
-    catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Analysis failed.'); }
+    try { await analyze(business); QueueFailures(current => { const next = {...current}; delete next[business.id]; return next; }); Notice(`Analysis saved for ${business.name}. Review the evidence and generated research prompt before deciding.`); }
+    catch (e) { QueueFailures(current => ({...current,[business.id]:e instanceof Error ? e.message : 'Analysis failed'})); ErrorMessage(e instanceof Error ? e.message : 'Analysis failed.'); }
     finally { Busy(false); }
+  };
+
+  // One bounded client-side queue shared by discovery imports and the opportunity workspace.
+  // Completed analyses are saved individually; interrupted runs resume from remaining records.
+  const runQueue = async (targets: BusinessRecord[]) => {
+    const pending = targets.filter(item => !working.current.analyses.some(a => a.businessId === item.id));
+    if (!pending.length) {
+      Notice('All selected businesses already have analyses. Use Re-analyze on a business to refresh its evidence.');
+      return;
+    }
+    const bounded = pending.slice(0, 25);
+    cancelBatch.current = false;
+    Busy(true); ErrorMessage(''); QueueFailures({});
+    let done = 0, failed = 0;
+    try {
+      for (const business of bounded) {
+        if (cancelBatch.current) break;
+        QueueProgress({done,failed,total:bounded.length,current:business.name});
+        try {
+          await analyze(business);
+          done++;
+        } catch (e) {
+          failed++;
+          QueueFailures(current => ({...current,[business.id]:e instanceof Error ? e.message : 'Analysis failed'}));
+          // A cloud persistence error is not a website problem: stop to protect saved data.
+          if (e instanceof Error && /save|cloud|workspace/i.test(e.message)) {
+            ErrorMessage('Cloud saving failed. The queue stopped to protect your existing records.');
+            break;
+          }
+        }
+      }
+      const remaining = bounded.length - done - failed;
+      Notice(`Queue finished: ${done} analyzed, ${failed} failed, ${remaining} remaining. ${pending.length > bounded.length ? `${pending.length - bounded.length} more await the next run.` : ''} Results are saved as they complete.`);
+    } finally {
+      QueueProgress(null); Busy(false); cancelBatch.current = false;
+    }
   };
 
   const analyzeAll = async () => {
     if (busy || !businesses.length) return;
-    const batchSize = data.preferences.batchSize || 5;
-    const pendingBusinesses = businesses.filter(business => !analyses.some(item => item.businessId === business.id));
-    const targets = pendingBusinesses.length ? pendingBusinesses : businesses;
-    cancelBatch.current = false;
-    Busy(true); ErrorMessage('');
-    let completed = 0, failed = false;
-    for (let offset = 0; offset < targets.length; offset += batchSize) {
-      const batch = targets.slice(offset, offset + batchSize);
-      for (const business of batch) {
-        if (cancelBatch.current) break;
-        try { await analyze(business); completed++; Notice(`Analyzed ${completed} of ${targets.length} businesses; batch ${Math.floor(offset / batchSize) + 1} saved.`); }
-        catch (e) { failed = true; ErrorMessage(`${business.name}: ${e instanceof Error ? e.message : 'analysis failed'}`); break; }
-      }
-      if (cancelBatch.current || failed) break;
-    }
-    if (cancelBatch.current) Notice(`Stopped after ${completed} businesses. Saved analyses are retained; you can resume the remaining queue later.`);
-    else if (!failed) Notice(`Finished analyzing ${completed} businesses. Review the ranked opportunities below.`);
-    Busy(false);
+    const targets = showOnlyUnanalyzed ? businesses.filter(b => !analyses.some(a => a.businessId === b.id)) : businesses;
+    await runQueue(targets);
+  };
+
+  const retryFailures = async () => {
+    if (busy) return;
+    const failed = working.current.businesses.filter(item => queueFailures[item.id]);
+    await runQueue(failed);
   };
 
   const copyPrompt = async (prompt: string) => {
@@ -223,19 +254,9 @@ export function OpportunityWorkspace() {
       Notice(`${added} businesses imported; ${selected.length - added} duplicates skipped. Missing OSM website tags are not proof a business has no website.`);
       OSMResults([]); SelectedOSM([]);
       if (autoAnalyzeOSM && imported.length) {
-        let analyzed = 0;
-        for (const business of imported) {
-          if (cancelBatch.current) break;
-          DiscoveryProgress(`Analyzing ${analyzed + 1} of ${imported.length}: ${business.name}`);
-          try {
-            await analyze(business);
-            analyzed++;
-          } catch (error) {
-            ErrorMessage(`Analysis stopped after ${analyzed} businesses: ${error instanceof Error ? error.message : 'unknown error'}`);
-            break;
-          }
-        }
-        Notice(`Imported ${added} businesses and analyzed ${analyzed}. Review their scores in the opportunity queue below.`);
+        // The import itself is already saved. Queue processing is resumable from the workspace.
+        Busy(false);
+        await runQueue(imported);
       }
     } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not import OpenStreetMap results.'); }
     finally { Busy(false); DiscoveryProgress(''); cancelBatch.current = false; }
