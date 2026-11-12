@@ -160,17 +160,21 @@ export function OpportunityWorkspace() {
     if (busy || !businesses.length) return;
     const batchSize = data.preferences.batchSize || 5;
     const pendingBusinesses = businesses.filter(business => !analyses.some(item => item.businessId === business.id));
-    const targets = (pendingBusinesses.length ? pendingBusinesses : businesses).slice(0, batchSize);
+    const targets = pendingBusinesses.length ? pendingBusinesses : businesses;
     cancelBatch.current = false;
     Busy(true); ErrorMessage('');
     let completed = 0, failed = false;
-    for (const business of targets) {
-      if (cancelBatch.current) break;
-      try { await analyze(business); completed++; Notice(`Analyzed ${completed} of ${targets.length} in this batch.`); }
-      catch (e) { failed = true; ErrorMessage(`${business.name}: ${e instanceof Error ? e.message : 'analysis failed'}`); break; }
+    for (let offset = 0; offset < targets.length; offset += batchSize) {
+      const batch = targets.slice(offset, offset + batchSize);
+      for (const business of batch) {
+        if (cancelBatch.current) break;
+        try { await analyze(business); completed++; Notice(`Analyzed ${completed} of ${targets.length} businesses; batch ${Math.floor(offset / batchSize) + 1} saved.`); }
+        catch (e) { failed = true; ErrorMessage(`${business.name}: ${e instanceof Error ? e.message : 'analysis failed'}`); break; }
+      }
+      if (cancelBatch.current || failed) break;
     }
-    if (cancelBatch.current) Notice(`Stopped after ${completed} businesses. Saved analyses are retained; run the next batch when ready.`);
-    else if (!failed) Notice(`Batch complete: ${completed} businesses analyzed. Review the ranked opportunities below.`);
+    if (cancelBatch.current) Notice(`Stopped after ${completed} businesses. Saved analyses are retained; you can resume the remaining queue later.`);
+    else if (!failed) Notice(`Finished analyzing ${completed} businesses. Review the ranked opportunities below.`);
     Busy(false);
   };
 
@@ -239,7 +243,7 @@ export function OpportunityWorkspace() {
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
     </section>
     <section className="panel">
-      <div className="between"><div><h2>Opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed</p></div><button className="primary" disabled={!businesses.length} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze next batch (${Math.min(data.preferences.batchSize || 5, businesses.length)})`}</button></div>
+      <div className="between"><div><h2>Opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed</p></div><button className="primary" disabled={!businesses.length} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze all businesses`}</button></div>
       <div className="headbuttons"><label>Show<select value={filter} onChange={e => Filter(e.target.value)}><option value="all">All businesses</option><option value="no-site">No website found</option><option value="outdated">Outdated websites</option><option value="unreviewed">Not analyzed yet</option></select></label></div>
       {!visible.length && <p className="empty">No businesses in this view yet. Add a business manually or import a CSV. You can include businesses with no website.</p>}
       <div className="opportunity-list">{visible.map(business => {
