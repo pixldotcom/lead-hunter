@@ -428,8 +428,8 @@ export function OpportunityWorkspace() {
       </>}
       <p className="muted">Supported types include dentist, restaurant, cafe, hotel, hair salon, pharmacy, beauty salon, gym, veterinary clinic, car repair, bakery, optician, real estate agency, law firm, accounting firm, travel agency, clothing store, supermarket and school. OpenStreetMap coverage varies by area.</p>
     </section>
-    <div className="v2-mobile-import-control"><button type="button" className="secondary" onClick={()=>ShowImport(value=>!value)} aria-expanded={showImport}>{showImport?'Hide manual import':'Add a business manually or import CSV'}</button></div>
-    <section id="v2-import" className={`panel v2-view-panel ${mobileView==='discover'?'v2-mobile-active':''}`}>
+    <div className={`v2-mobile-import-control ${mobileView==='discover'?'v2-import-visible':''}`}><button type="button" className="secondary" onClick={()=>ShowImport(value=>!value)} aria-expanded={showImport}>{showImport?'Hide manual import':'Add a business manually or import CSV'}</button></div>
+    <section id="v2-import" className={`panel v2-view-panel ${mobileView==='discover'&&showImport?'v2-mobile-active':''}`}>
       <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div></div>
       <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
       <form onSubmit={submit}>
