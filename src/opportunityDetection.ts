@@ -44,8 +44,8 @@ export function detectOpportunities(business: BusinessRecord, evidence: Opportun
   const evidenceConfidence = evidence.length
     ? Math.round(evidence.filter(item => item.confidence === 'confirmed').length / evidence.length * 100)
     : 0;
-  const opportunityScore = Math.max(...opportunities.map(item => item.score), 0);
-  const totalScore = Math.min(100, Math.round(opportunityScore * 0.55 + reputationScore * 0.25 + websiteBoost * 0.2));
+  const scored = scoreOpportunities(business, evidence, opportunities);
+  const totalScore = Math.min(100, Math.round(scored.total * 0.8 + reputationScore * 0.1 + websiteBoost * 0.1));
 
   const analysis: OpportunityAnalysis = {
     businessId: business.id,
