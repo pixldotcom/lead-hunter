@@ -248,3 +248,48 @@ a,.linkbtn{color:var(--brand-orange)}
 }
 
 @media(max-width:767px){.v2-mobile-import-control:not(.v2-import-visible){display:none}}
+
+
+/* V2 mobile first viewport: remove account/admin chrome from the primary task flow. */
+.mobile-menu-button{display:none}
+.cloud-utilities{display:inline-block;vertical-align:middle}
+.cloud-utilities summary{cursor:pointer;font-size:.7rem;padding:6px 9px;border:1px solid var(--line);border-radius:8px;list-style:revert}
+.cloud-utilities-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:10px}
+@media(max-width:767px){
+ :root{font-size:clamp(16px,calc(16px * var(--app-text-scale)),20px)}
+ .session-control{min-height:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 12px;margin:0;font-size:.65rem}
+ .session-email{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+ .session-control>.secondary{min-height:36px;padding:5px 10px;flex:0 0 auto;font-size:.65rem}
+ .cloud-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0;padding:6px 12px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--panel);font-size:.65rem}
+ .cloud-status-label{flex:1;min-width:0}
+ .cloud-status:not(.cloud-status-attention) .cloud-status-label{color:var(--muted)}
+ .cloud-status .cloud-utilities summary{font-size:.65rem;min-height:34px;display:flex;align-items:center}
+ .cloud-status .cloud-utilities[open]{width:100%}
+ .cloud-status .cloud-utilities-actions{padding:8px 0}
+ .cloud-status .cloud-utilities-actions button{min-height:44px;flex:1 1 150px}
+ .cloud-status-attention{border:1px solid var(--brand-orange);padding:12px}
+ .migration-panel{margin:6px 12px;padding:8px}
+ .sidebar{display:none;position:relative;inset:auto;width:100%;height:auto;max-height:none;overflow:visible;grid-template-columns:none;padding:8px 12px;gap:6px;border-right:0;border-bottom:1px solid var(--line);z-index:5}
+ .sidebar.mobile-menu-open{display:flex;flex-wrap:wrap}
+ .sidebar .brand{display:none}
+ .sidebar .nav{flex:1 1 130px;width:auto;min-height:44px;white-space:normal;text-align:left;justify-content:flex-start}
+ .sidebar .legacy-toggle{flex:1 1 100%;min-height:44px}
+ .sidebar .legacy-nav:not(.legacy-open){display:none}
+ .sidebar .legacy-nav.legacy-open{display:flex}
+ main{margin:0;min-width:0}
+ header{position:relative;min-height:48px;padding:6px 12px;gap:8px;flex-wrap:nowrap}
+ header>span{flex:1;min-width:0;font-size:.68rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+ header>div{flex:0 0 auto;gap:8px;flex-wrap:nowrap}
+ header>div>i{display:none}
+ header .topavatar{display:none}
+ .mobile-menu-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:44px;min-height:44px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-size:1rem}
+ .content{padding:12px;min-width:0}
+ footer{display:none}
+ .opportunity-workspace{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+ .opportunity-workspace .pagehead{padding:0 2px}
+ .opportunity-workspace .pagehead h1{font-size:1.3rem;line-height:1.15}
+ .opportunity-workspace .pagehead p{display:none}
+ .opportunity-workspace .v2-overview{gap:8px}
+ .opportunity-workspace .v2-overview>div{padding:12px}
+ .opportunity-workspace .v2-mobile-tabs{z-index:90}
+}
