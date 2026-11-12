@@ -3,7 +3,7 @@ import type { BusinessImportRow } from './opportunityPersistence';
 type Element = { type: 'node' | 'way' | 'relation'; id: number; lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> };
 export type OSMBusiness = BusinessImportRow & { sourceUrl: string; discoverySource: string };
 
-const endpoint = 'https://overpass-api.de/api/interpreter';
+const endpoints = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.nchc.org.tw/api/interpreter'];
 export function buildOverpassQuery(category: string, location: string): string {
   const term = category.trim().toLowerCase();
   if (!term || !location.trim() || category.length > 80 || location.length > 120) throw Error('Enter a category and location using the stated length limits.');
@@ -34,8 +34,22 @@ export function parseOverpassBusinesses(payload: unknown, category: string, loca
 
 export async function searchOpenStreetMap(category: string, location: string, fetcher: typeof fetch = fetch): Promise<OSMBusiness[]> {
   const query = buildOverpassQuery(category, location);
-  const response = await fetcher(endpoint, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: `data=${encodeURIComponent(query)}`, signal: AbortSignal.timeout(25000) });
-  if (response.status === 429) throw Error('OpenStreetMap is busy. Wait a minute before trying again.');
-  if (!response.ok) throw Error(`OpenStreetMap search failed (${response.status}). Try again later or use CSV import.`);
-  return parseOverpassBusinesses(await response.json(), category.trim(), location.trim());
+  let lastError = 'No public discovery server responded.';
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetcher(endpoint, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: `data=${encodeURIComponent(query)}`, signal: AbortSignal.timeout(12000) });
+      if (response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504) {
+        lastError = `Discovery server temporarily unavailable (${response.status}).`;
+        continue;
+      }
+      if (!response.ok) {
+        lastError = `Discovery server rejected the search (${response.status}).`;
+        continue;
+      }
+      return parseOverpassBusinesses(await response.json(), category.trim(), location.trim());
+    } catch (error) {
+      lastError = error instanceof Error && error.name === 'TimeoutError' ? 'Discovery server timed out.' : 'Discovery server could not be reached or blocked this browser request.';
+    }
+  }
+  throw Error(`${lastError} All free OpenStreetMap endpoints failed. Check your connection, retry shortly, or use CSV import. Public endpoints may block browser requests.`);
 }
