@@ -1,5 +1,37 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { buildOverpassQuery, parseOverpassBusinesses } from '../src/openStreetMap';
+// Keep this serverless entry point self-contained: Vercel does not package Vite's
+// client-side TypeScript modules as Node-resolvable ESM dependencies.
+const categories: Record<string, [string, string]> = {
+  dentist:['amenity','dentist'], 'dental clinic':['amenity','dentist'], restaurant:['amenity','restaurant'],
+  cafe:['amenity','cafe'], hotel:['tourism','hotel'], 'hair salon':['shop','hairdresser'],
+  pharmacy:['amenity','pharmacy'], 'beauty salon':['shop','beauty'], gym:['leisure','fitness_centre'],
+  'veterinary clinic':['amenity','veterinary'], 'car repair':['shop','car_repair'],
+  bakery:['shop','bakery'], optician:['shop','optician'], 'real estate agency':['office','estate_agent'],
+  'law firm':['office','lawyer'], 'accounting firm':['office','accountant'],
+  'travel agency':['shop','travel_agency'], 'clothing store':['shop','clothes'],
+  supermarket:['shop','supermarket'], school:['amenity','school'],
+};
+function buildOverpassQuery(category: string, location: string): string {
+  const tag = categories[category.trim().toLowerCase()];
+  if (!tag) throw Error('Unsupported category. Choose a category listed in the discovery form.');
+  if (!location.trim() || category.length > 80 || location.length > 120) throw Error('Enter a valid category and location.');
+  const area = location.trim().replace(/["\\\\]/g,' ').replace(/\\s+/g,' ');
+  return `[out:json][timeout:20];\\narea["name"="${area}"]["boundary"="administrative"]->.searchArea;\\n(nwr["${tag[0]}"="${tag[1]}"](area.searchArea););\\nout center tags 101;`;
+}
+type Element = {type:'node'|'way'|'relation';id:number;lat?:number;lon?:number;center?:{lat:number;lon:number};tags?:Record<string,string>};
+function parseOverpassBusinesses(payload: unknown, category: string, location: string) {
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as {elements?:unknown}).elements)) throw Error('Invalid OpenStreetMap response.');
+  return ((payload as {elements:Element[]}).elements).slice(0,100).flatMap(item=>{
+    const tags=item.tags;
+    if (!tags?.name?.trim() || !['node','way','relation'].includes(item.type) || !Number.isFinite(item.id)) return [];
+    const lat=item.lat??item.center?.lat,lon=item.lon??item.center?.lon;
+    const websiteUrl=tags.website||tags['contact:website']||'';
+    const street=[tags['addr:street'],tags['addr:housenumber']].filter(Boolean).join(' ');
+    const address=[street,tags['addr:suburb'],tags['addr:city']||location,tags['addr:postcode']].filter(Boolean).join(', ');
+    return [{name:tags.name.trim(),category:tags.amenity||tags.shop||tags.office||tags.tourism||category,location:address||location,websiteUrl,phone:tags.phone||tags['contact:phone']||'',rating:null,reviewCount:null,sourceUrl:`https://www.openstreetmap.org/${item.type}/${item.id}`,discoverySource:'OpenStreetMap (Overpass)',...(websiteUrl?{}:{websiteStatus:'unknown'}),...(tags.email||tags['contact:email']?{email:tags.email||tags['contact:email']}:{}),...(lat!==undefined&&lon!==undefined?{profiles:[`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`]}:{})}];
+  });
+}
+
 
 const endpoints = [
   'https://overpass.kumi.systems/api/interpreter',
