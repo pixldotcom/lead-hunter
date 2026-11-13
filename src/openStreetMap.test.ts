@@ -19,16 +19,14 @@ describe('OpenStreetMap discovery', () => {
     expect(rows[0].sourceUrl).toBe('https://www.openstreetmap.org/node/7');
   });
 
-  it('caps results and retries temporary errors on a second free endpoint', async () => {
-    const elements = Array.from({ length: 105 }, (_, id) => ({ type: 'node' as const, id, tags: { name: `Business ${id}` } }));
-    expect(parseOverpassBusinesses({ elements }, 'dentist', 'Ludhiana')).toHaveLength(100);
-    const fetcher = vi.fn().mockResolvedValueOnce(new Response('', { status: 429 })).mockResolvedValueOnce(new Response(JSON.stringify({elements:[elements[0]]}), {status:200,headers:{'content-type':'application/json'}}));
-    await expect(searchOpenStreetMap('dentist', 'Ludhiana', fetcher)).resolves.toHaveLength(1);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+  it('uses same-origin discovery API instead of public browser endpoints', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({businesses:[{name:'Example Dental',sourceUrl:'https://www.openstreetmap.org/node/7'}]}),{status:200}));
+    await expect(searchOpenStreetMap('dentist','New Delhi',fetcher)).resolves.toHaveLength(1);
+    expect(fetcher.mock.calls[0][0]).toBe('/api/discover');
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({category:'dentist',location:'New Delhi'});
   });
-  it('reports when every public endpoint is unavailable', async () => {
-    const fetcher = vi.fn().mockResolvedValue(new Response('', {status:503}));
-    await expect(searchOpenStreetMap('dentist','Ludhiana',fetcher)).rejects.toThrow(/All free OpenStreetMap endpoints failed/);
-    expect(fetcher).toHaveBeenCalledTimes(3);
+  it('surfaces actionable server errors', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Public discovery services unavailable.'}),{status:503}));
+    await expect(searchOpenStreetMap('dentist','New Delhi',fetcher)).rejects.toThrow(/unavailable/);
   });
 });
