@@ -43,7 +43,7 @@ describe('real PostgreSQL migration, transactional saves and RLS',()=>{
  }));
  it('Quick Import survives a real PostgreSQL save, fresh load, and pipeline qualification',async()=>asUser(userA,async()=>{
   const before=await load();
-  const lines='https://www.google.com/maps/place/Example+Studio | Example Studio | Ludhiana\\nExample Studio | Ludhiana | https://example-studio.test';
+  const lines='https://www.google.com/maps/place/Example+Studio | Example Studio | Ludhiana\nExample Studio | Ludhiana | https://example-studio.test';
   const result=importBusinessRows(parseQuickImport(lines),before.data.discovery.businesses);
   expect(result.added).toBe(1);
   expect(result.merged).toBe(1);
