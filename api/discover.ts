@@ -36,7 +36,6 @@ function parseOverpassBusinesses(payload: unknown, category: string, location: s
 const endpoints = [
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.nchc.org.tw/api/interpreter',
 ];
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const respond = (value: unknown, status = 200) => {
@@ -65,13 +64,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     respond({error:error instanceof Error ? error.message : 'Invalid search request.'},400);return;
   }
   let lastError = 'The public discovery services are unavailable.';
+  // Keep the complete request within the serverless execution window.
+  const deadline = Date.now() + 16000;
   for (const endpoint of endpoints) {
+    const remaining = deadline - Date.now();
+    if (remaining < 1500) break;
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8', 'user-agent': 'LeadHunterV2/1.0 (OpenStreetMap business discovery)' },
         body: 'data=' + encodeURIComponent(query),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(Math.min(7000, remaining)),
       });
       if (!response.ok) {lastError='OpenStreetMap service responded with HTTP '+response.status+'.';continue;}
       respond({businesses:parseOverpassBusinesses(await response.json(),category.trim(),location.trim())});return;
@@ -79,5 +82,5 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       lastError = error instanceof Error && error.name === 'TimeoutError' ? 'OpenStreetMap service timed out.' : 'OpenStreetMap service connection failed.';
     }
   }
-  respond({error:lastError+' Please retry shortly. No records were changed.'},503);
+  respond({error:lastError+' Search stopped after a bounded timeout. Please retry shortly. No records were changed.'},503);
 }
