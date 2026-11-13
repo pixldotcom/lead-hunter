@@ -67,6 +67,8 @@ export type OpportunityAnalysis = {
   analyzedAt: string;
   researchPrompt: string;
   researchNotes?: ImportedResearch | null;
+  /** Previous imported research reports, newest entry last; optional for legacy workspaces. */
+  researchHistory?: ImportedResearch[];
 };
 
 export type ImportedResearch = {
