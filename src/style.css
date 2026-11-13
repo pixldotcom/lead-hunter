@@ -341,3 +341,14 @@ a,.linkbtn{color:var(--brand-orange)}
 .opportunity-workspace label:has(>textarea[readonly]){min-width:0}
 .opportunity-workspace .headbuttons{flex-wrap:wrap}
 @media(max-width:767px){.opportunity-workspace textarea[readonly]{font-size:.76rem;min-height:170px}.opportunity-workspace .headbuttons>button{max-width:100%;white-space:normal}}
+
+
+/* Agent research is part of each qualified prospect, not a separate legacy tool. */
+.agent-research-inline{display:grid;gap:12px;margin-top:14px;min-width:0}
+.agent-research-inline label{display:grid;gap:6px;min-width:0}
+.agent-research-inline textarea{width:100%;max-width:100%;min-width:0;overflow-wrap:anywhere}
+.agent-research-inline select{width:100%;max-width:440px}
+.agent-research-status{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(55,87,245,.06);overflow-wrap:anywhere}
+.agent-research-status p{margin:6px 0;line-height:1.5}
+.agent-research-status small{color:var(--muted);font-size:.72rem}
+@media(max-width:767px){.agent-research-inline{gap:10px}.agent-research-inline .headbuttons button{flex:1 1 135px;min-height:44px}.agent-research-inline textarea{font-size:.76rem}}
