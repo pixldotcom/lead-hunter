@@ -37,10 +37,10 @@ export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis
   if (analysis.scoreBreakdown !== undefined) {
     const breakdown=analysis.scoreBreakdown;
     if (!isObject(breakdown)) throw Error('Invalid opportunity score breakdown.');
-    const scoreKeys=['total','websiteNeed','reputation','serviceEvidence','confidence','bestService'];
+    const scoreKeys=['total','websiteNeed','reputation','serviceEvidence','confidence','bestService'] as const;
     if (!scoreKeys.every(key => typeof breakdown[key]==='number' && Number.isFinite(breakdown[key]) && breakdown[key]>=0 && breakdown[key]<=100)) throw Error('Invalid opportunity score breakdown.');
     const weighted=breakdown.weighted;
-    if (!isObject(weighted) || !['websiteNeed','reputation','bestService','confidence'].every(key => typeof weighted[key]==='number' && Number.isFinite(weighted[key]) && weighted[key]>=0 && weighted[key]<=100)) throw Error('Invalid opportunity score breakdown.');
+    if (!isObject(weighted) || !(['websiteNeed','reputation','bestService','confidence'] as const).every(key => typeof weighted[key]==='number' && Number.isFinite(weighted[key]) && weighted[key]>=0 && weighted[key]<=100)) throw Error('Invalid opportunity score breakdown.');
     const explanation=breakdown.explanation;
     if (!Array.isArray(explanation) || explanation.some(item=>!isText(item))) throw Error('Invalid opportunity score breakdown.');
   }
