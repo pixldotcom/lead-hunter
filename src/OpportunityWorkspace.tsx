@@ -63,6 +63,7 @@ export function OpportunityWorkspace() {
   const [researchJson, ResearchJson] = useState('');
   const [osmResults, OSMResults] = useState<OSMBusiness[]>([]);
   const [selectedOSM, SelectedOSM] = useState<string[]>([]);
+  const [discoveryView, DiscoveryView] = useState<'priority'|'all'|'listed'>('priority');
   const [autoAnalyzeOSM, AutoAnalyzeOSM] = useState(true);
   const [discoveryProgress, DiscoveryProgress] = useState('');
   const [queueProgress, QueueProgress] = useState<{done:number;total:number;failed:number;current:string}|null>(null);
@@ -308,7 +309,7 @@ export function OpportunityWorkspace() {
 
   const searchOSM = async () => {
     Busy(true); ErrorMessage(''); Notice('Searching OpenStreetMap…'); OSMResults([]); SelectedOSM([]); DiscoveryProgress('');
-    try { const results = await searchOpenStreetMap(category, location); OSMResults(results); SelectedOSM(results.map(row => row.sourceUrl)); Notice(`${results.length} OpenStreetMap candidates found. Review the source links before importing.`); }
+    try { const results = await searchOpenStreetMap(category, location); OSMResults([...results].sort((a,b)=>Number(Boolean(a.websiteUrl))-Number(Boolean(b.websiteUrl)))); SelectedOSM(results.filter(row=>!row.websiteUrl).map(row => row.sourceUrl)); DiscoveryView('priority'); Notice(`${results.length} OpenStreetMap candidates found. Review the source links before importing.`); }
     catch (e) { ErrorMessage(e instanceof Error ? e.message : 'OpenStreetMap search failed.'); Notice(''); }
     finally { Busy(false); }
   };
@@ -418,10 +419,16 @@ export function OpportunityWorkspace() {
       </div>
       {discoveryProgress && <div className="headbuttons"><p role="status" className="opportunity-notice">{discoveryProgress}</p><button className="secondary" onClick={() => {cancelBatch.current = true;}}>Stop after current business</button></div>}
       {osmResults.length > 0 && <>
-        <div className="between"><div><h3>2. Review discovery results</h3><p>{osmResults.length} candidates · {selectedOSM.length} selected · {osmResults.filter(row => row.websiteUrl).length} have a listed website</p></div><div className="headbuttons"><button className="secondary" disabled={busy} onClick={() => SelectedOSM(osmResults.map(row => row.sourceUrl))}>Select all</button><button className="secondary" disabled={busy} onClick={() => SelectedOSM([])}>Clear selection</button></div></div>
-        <div className="opportunity-list" style={{maxHeight:360,overflowY:'auto'}}>{osmResults.map((row, i) => <label key={`${row.sourceUrl}-${i}`} style={{display:'flex',gap:12,alignItems:'flex-start',padding:'9px 4px',borderBottom:'1px solid var(--line)'}}>
+        <div className="between"><div><h3>2. Review discovery results</h3><p>{osmResults.length} candidates · {selectedOSM.length} selected · {osmResults.filter(row => !row.websiteUrl).length} need website verification</p></div><div className="headbuttons"><button className="secondary" disabled={busy} onClick={() => SelectedOSM(osmResults.map(row => row.sourceUrl))}>Select all</button><button className="secondary" disabled={busy} onClick={() => SelectedOSM(osmResults.filter(row=>!row.websiteUrl).map(row => row.sourceUrl))}>Select unlisted</button><button className="secondary" disabled={busy} onClick={() => SelectedOSM([])}>Clear selection</button></div></div>
+        <div className="discovery-review-tabs" role="group" aria-label="Filter discovery candidates">
+          <button type="button" className={discoveryView==='priority'?'active':''} aria-pressed={discoveryView==='priority'} onClick={()=>DiscoveryView('priority')}>Verify websites ({osmResults.filter(row=>!row.websiteUrl).length})</button>
+          <button type="button" className={discoveryView==='listed'?'active':''} aria-pressed={discoveryView==='listed'} onClick={()=>DiscoveryView('listed')}>Listed websites ({osmResults.filter(row=>!!row.websiteUrl).length})</button>
+          <button type="button" className={discoveryView==='all'?'active':''} aria-pressed={discoveryView==='all'} onClick={()=>DiscoveryView('all')}>All ({osmResults.length})</button>
+        </div>
+        <p className="muted discovery-review-note">No website listed in OpenStreetMap is a research lead, not proof that a business has no website. Verify before outreach.</p>
+        <div className="opportunity-list discovery-review-list">{osmResults.filter(row=>discoveryView==='all' || (discoveryView==='priority'?!row.websiteUrl:!!row.websiteUrl)).map((row, i) => <label key={`${row.sourceUrl}-${i}`} className="discovery-review-card">
           <input type="checkbox" disabled={busy} checked={selectedOSM.includes(row.sourceUrl)} onChange={e => SelectedOSM(current => e.target.checked ? [...current,row.sourceUrl] : current.filter(url => url !== row.sourceUrl))}/>
-          <span><strong>{row.name}</strong> · {row.location}<br/>{row.websiteUrl ? <a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">Listed website</a> : <span className="muted">No website listed in OSM — verification needed</span>} · <a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">OSM source</a></span>
+          <span className="discovery-review-detail"><strong>{row.name}</strong><small>{row.location}</small><span className="discovery-review-evidence">{row.websiteUrl ? <a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">Listed website</a> : <span className="muted">Website not listed — verify independently</span>}</span><a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">View OSM source</a></span>
         </label>)}</div>
         <label style={{display:'flex',gap:9,alignItems:'center',margin:'12px 0'}}><input type="checkbox" checked={autoAnalyzeOSM} disabled={busy} onChange={e => AutoAnalyzeOSM(e.target.checked)}/> Analyze newly imported businesses automatically (uses existing free website scanner)</label>
         <div className="headbuttons"><button className="primary" disabled={busy || !selectedOSM.length} onClick={() => {cancelBatch.current = false; void importOSM();}}>Import {selectedOSM.length} selected {autoAnalyzeOSM ? 'and analyze' : 'businesses'}</button><button className="secondary" disabled={busy} onClick={() => {OSMResults([]);SelectedOSM([]);}}>Discard results</button>{busy && <button className="secondary" onClick={() => {cancelBatch.current = true;}}>Stop after current business</button>}</div>
