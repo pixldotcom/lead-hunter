@@ -89,7 +89,7 @@ async function photonSearch(category:string,location:string,timeout:number):Prom
   for(const feature of data.features??[]) {
     const p=feature.properties??{};
     const name=typeof p.name==='string'?p.name.trim():'';
-    const osmId=p.osm_id,osmType=p.osm_type;
+    const osmId=p.osm_id;const osmType=({N:'node',W:'way',R:'relation'} as Record<string,string>)[String(p.osm_type)]??String(p.osm_type);
     const key=p.osm_key, value=p.osm_value;
     if(!name || !['node','way','relation'].includes(String(osmType)) || !Number.isFinite(Number(osmId)))continue;
     if(key!==tag[0]||value!==tag[1])continue;
