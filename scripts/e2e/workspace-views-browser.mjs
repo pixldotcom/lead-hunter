@@ -31,7 +31,7 @@ try{
   await browser.click('Pipeline');await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'&&document.body.textContent.includes('Workspace view fixture')");
   await browser.input('[aria-label="Pipeline stage for Workspace view fixture"]','researching');
   await browser.wait("fetch('/api/workspace').then(r=>r.json()).then(r=>r.data.discovery.businesses.find(b=>b.id==="+JSON.stringify(business.id)+")?.pipelineStage==='researching')");
-  await browser.send('Page.reload');await browser.wait("document.querySelector('.opportunities-page h1')?.textContent==='Business Opportunities'");await browser.click('Pipeline');await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'&&document.body.textContent.includes('Workspace view fixture')");
+  await browser.send('Page.reload');await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'&&document.body.textContent.includes('Workspace view fixture')");
   assert.equal(await browser.evaluate("document.querySelector('[aria-label=\"Pipeline stage for Workspace view fixture\"]')?.value"),'researching','stage should survive reload');
   await browser.click('Follow-ups');await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
   await browser.click('Schedule follow-up');
@@ -44,5 +44,17 @@ try{
   await browser.click('Follow-ups');await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'&&document.body.textContent.includes('Follow-up visibility fixture note')");
   assert.ok(await browser.evaluate("[...document.querySelectorAll('.followup-section h2')].some(heading=>heading.textContent.includes('Upcoming'))"),'scheduled activity should appear in Upcoming');
   assert.ok(await browser.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'mobile view must not overflow horizontally');
+  await browser.send('Page.navigate',{url:origin+'/#/pipeline'});
+  await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'");
+  assert.equal(await browser.evaluate('location.hash'),'#/pipeline','direct pipeline URL should open the Pipeline workspace');
+  await browser.send('Page.navigate',{url:origin+'/#/follow-ups'});
+  await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
+  await browser.evaluate('history.back()');
+  await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'");
+  await browser.evaluate('history.forward()');
+  await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
+  await browser.send('Page.reload');
+  await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
+  assert.equal(await browser.evaluate('location.hash'),'#/follow-ups','refresh should preserve the selected workspace route');
   console.log('PASS: separate Business Opportunities, Pipeline and Follow-ups navigation; cloud import, stage persistence/reload, and mobile layout. Synthetic Supabase fixture only.');
 }finally{if(browser)await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await fixture.close()}
