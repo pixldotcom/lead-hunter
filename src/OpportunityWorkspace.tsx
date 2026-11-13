@@ -429,7 +429,7 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
     <section id="v2-discover" className={`panel v2-view-panel ${mobileView==='discover'?'v2-mobile-active':''}`}>
       <div className="between"><div><h2>1. Discover businesses</h2><p>Find public business listings by category and location, then import selected prospects and optionally analyze them automatically. Ratings are not supplied by OpenStreetMap.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
       <div className="formgrid">
-        <label>Business category<input value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. dentist, gym, hotel"/></label>
+        <label>Business category<input list="v2-discovery-categories" value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. builder, gym, dentist"/><datalist id="v2-discovery-categories">{['builder','construction company','architect','electrician','plumber','interior designer','dentist','restaurant','cafe','hotel','gym','pharmacy','beauty salon','real estate agency','school','supermarket'].map(item=><option key={item} value={item}/>)}</datalist></label>
         <label>City or administrative area<input value={location} maxLength={120} onChange={e => Location(e.target.value)} placeholder="e.g. Ludhiana"/></label>
       </div>
       <div className="headbuttons"><button className="primary" disabled={busy || !category.trim() || !location.trim()} onClick={() => void searchOSM()}>{busy ? 'Working…' : 'Find businesses'}</button>
