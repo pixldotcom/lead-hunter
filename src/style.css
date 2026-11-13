@@ -357,3 +357,14 @@ a,.linkbtn{color:var(--brand-orange)}
 .experimental-osm-body .formgrid{margin-top:8px}
 .experimental-osm-body .discovery-review-list{max-height:440px;overflow:auto}
 @media(max-width:767px){.quick-import-panel{gap:12px}.quick-import-row{padding:12px}.experimental-osm-body{padding:9px}.experimental-osm-body .headbuttons>*{flex:1 1 140px}}
+
+/* Keep loading calm; show recovery only when the cloud load fails. */
+.cloud-recovery{margin:22px auto 0;max-width:520px;padding:16px;border:1px solid var(--border,#36383e);border-radius:12px;background:rgba(255,255,255,.025)}
+.cloud-recovery>p{margin:0 0 14px;font-size:.9rem;line-height:1.5}
+.cloud-recovery-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.cloud-recovery-details{flex:1 1 230px;min-width:0}
+.cloud-recovery-details>summary{cursor:pointer;padding:10px 12px;border:1px solid #45454b;border-radius:8px;font-weight:600;list-style-position:inside}
+.cloud-recovery-details[open]>summary{margin-bottom:12px}
+.cloud-recovery-details .cloud-recovery-actions{display:grid;grid-template-columns:1fr}
+.cloud-recovery-details button{white-space:normal;text-align:center}
+@media(max-width:560px){.cloud-recovery-actions{flex-direction:column;align-items:stretch}.cloud-recovery-details{flex:auto}}
