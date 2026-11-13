@@ -123,10 +123,20 @@ export function createBusinessRecord(row: BusinessImportRow, now = new Date()): 
 }
 
 export function sameBusiness(a: BusinessRecord, b: BusinessRecord): boolean {
+  // An identical official website is stronger evidence than a name inferred from
+  // its hostname. OSM and URL-only imports often have different display names.
+  // Compare the full host + path, not just the domain (shared-hosted sites).
+  const siteKey = (raw: string) => {
+    if (!raw) return '';
+    try {
+      const url = new URL(raw);
+      return (url.hostname.toLowerCase().replace(/^www\./, '') + url.pathname.replace(/\/+$/, '').toLowerCase()) || '';
+    } catch { return ''; }
+  };
+  const siteA = siteKey(a.websiteUrl), siteB = siteKey(b.websiteUrl);
+  if (siteA && siteB && siteA === siteB) return true;
   if (normalize(a.name) !== normalize(b.name) || normalize(a.location) !== normalize(b.location)) return false;
   const phoneA = normalizePhone(a.phone), phoneB = normalizePhone(b.phone);
-  const siteA = a.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
-  const siteB = b.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
   if (phoneA && phoneB && phoneA === phoneB) return true;
   if (siteA && siteB && siteA === siteB) return true;
   if (phoneA && phoneB && phoneA !== phoneB) return false;
