@@ -19,6 +19,7 @@ export function validateBusinessRecord(value: unknown): BusinessRecord {
   if (!b.id.trim() || !b.name.trim() || !websiteStatuses.includes(b.websiteStatus) || !optionalNumber(b.rating, 5) || !optionalNumber(b.reviewCount, 100000000) || (b.rating !== null && b.rating > 5) || (b.reviewCount !== null && !Number.isSafeInteger(b.reviewCount)) || !Array.isArray(b.profiles) || b.profiles.length > 30 || b.profiles.some(p => !isText(p) || p.length > 200) || !validDate(b.discoveredAt) || !validDate(b.updatedAt)) throw Error('Invalid business record fields.');
   if (b.websiteUrl && !/^https?:\/\//i.test(b.websiteUrl)) throw Error('Business website must use HTTP or HTTPS.');
   if (b.sourceUrl && !/^https?:\/\//i.test(b.sourceUrl)) throw Error('Business source must use HTTP or HTTPS.');
+  if (b.websiteUrl.length > 2048 || b.sourceUrl.length > 2048 || b.name.trim().length > 200 || b.location.length > 200 || b.category.length > 120) throw Error('Business fields exceed their allowed length.');
   return b;
 }
 
@@ -107,6 +108,7 @@ export function parseBusinessCsv(text: string): BusinessImportRow[] {
 
 export function createBusinessRecord(row: BusinessImportRow, now = new Date()): BusinessRecord {
   const stamp = now.toISOString();
+  if (!row.name?.trim()) throw Error('Business name is required.');
   const websiteUrl = (row.websiteUrl ?? '').trim();
   if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) throw Error('Website URL must start with http:// or https://.');
   const sourceUrl = (row.sourceUrl ?? '').trim();

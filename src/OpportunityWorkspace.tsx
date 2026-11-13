@@ -6,6 +6,7 @@ import { requestAudit } from './analyzerApi';
 import { readEvidence } from './discovery';
 import { detectOpportunities, prioritizedOpportunities } from './opportunityDetection';
 import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
+import { importBusinessRows, parseQuickImport } from './quickImport';
 import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } from './opportunityModel';
 import { searchOpenStreetMap, type OSMBusiness } from './openStreetMap';
 import { buildQualifiedShortlist, buildProspectBrief, type QualificationTier } from './prospectQualification';
@@ -44,7 +45,9 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
   const [phone, Phone] = useState('');
   const [sourceUrl, Source] = useState('');
   const [mobileView, MobileView] = useState<'home'|'discover'|'prospects'|'followups'>(initialView);
-  const [showImport, ShowImport] = useState(false);
+  const [experimentalOSMOpen, ExperimentalOSMOpen] = useState(false);
+  const [quickImportText, QuickImportText] = useState('');
+  const [quickImportPreview, QuickImportPreview] = useState<ReturnType<typeof parseQuickImport> | null>(null);
   const [filter, Filter] = useState('all');
   const [qualificationFilter, QualificationFilter] = useState<QualificationTier | 'all'>('all');
   const [outreachBusinessId, OutreachBusiness] = useState('');
@@ -71,6 +74,7 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
   const [discoveryProgress, DiscoveryProgress] = useState('');
   const [queueProgress, QueueProgress] = useState<{done:number;total:number;failed:number;current:string}|null>(null);
   const [queueFailures, QueueFailures] = useState<Record<string,string>>({});
+  const [websitePreview, WebsitePreview] = useState<Record<string, unknown> | null>(null);
 
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
@@ -86,28 +90,53 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
   const addBusiness = async (row: Parameters<typeof createBusinessRecord>[0]) => {
     const record = createBusinessRecord(row);
     const currentBusinesses = working.current.businesses;
-    const currentAnalyses = working.current.analyses;
+    const result = importBusinessRows([row], currentBusinesses);
+    const added = result.added > 0;
     const existing = currentBusinesses.find(item => sameBusiness(item, record));
-    if (existing) {
-      const merged = currentBusinesses.map(item => item.id === existing.id ? {
-        ...item,
-        category: item.category || record.category,
-        websiteUrl: item.websiteUrl || record.websiteUrl,
-        websiteStatus: item.websiteStatus === 'unknown' ? record.websiteStatus : item.websiteStatus,
-        rating: item.rating ?? record.rating,
-        reviewCount: item.reviewCount ?? record.reviewCount,
-        phone: item.phone || record.phone,
-        email: item.email || record.email,
-        profiles: [...new Set([...item.profiles, ...record.profiles])],
-        sourceUrl: item.sourceUrl || record.sourceUrl,
-        discoverySource: item.discoverySource || record.discoverySource,
-        updatedAt: new Date().toISOString(),
-      } : item);
-      await persist(merged, currentAnalyses.filter(a => a.businessId !== existing.id));
-      return false;
-    }
-    await persist([record, ...currentBusinesses]);
-    return true;
+    await persist(result.businesses, added ? working.current.analyses : working.current.analyses.filter(a => a.businessId !== existing?.id));
+    return added;
+  };
+
+  const previewQuickImport = () => {
+    ErrorMessage(''); Notice(''); WebsitePreview(null);
+    try { QuickImportPreview(parseQuickImport(quickImportText)); }
+    catch (e) { QuickImportPreview(null); ErrorMessage(e instanceof Error ? e.message : 'Could not validate import.'); }
+  };
+
+  const saveQuickImport = async () => {
+    if (!quickImportPreview || busy) return;
+    Busy(true); ErrorMessage(''); Notice('');
+    try {
+      const imported = importBusinessRows(quickImportPreview, working.current.businesses);
+      await persist(imported.businesses);
+      QuickImportPreview(null); QuickImportText(''); WebsitePreview(null);
+      Notice(`${imported.added} added; ${imported.merged} duplicate${imported.merged === 1 ? '' : 's'} merged. Prospects are saved to this cloud workspace.`);
+      MobileView('prospects');
+    } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Could not save businesses.'); }
+    finally { Busy(false); }
+  };
+
+  const extractWebsite = async (rowIndex: number, websiteUrl: string) => {
+    if (busy) return;
+    Busy(true); ErrorMessage(''); WebsitePreview(null);
+    try {
+      const response = await fetch('/api/import/website', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ websiteUrl }), signal: AbortSignal.timeout(12000) });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error || 'Could not read the business website.');
+      WebsitePreview({ rowIndex, data });
+      Notice('Public website information is ready to review. Confirm each extracted field before saving.');
+    } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'Website lookup failed.'); }
+    finally { Busy(false); }
+  };
+
+  const applyWebsitePreview = () => {
+    if (!websitePreview || !quickImportPreview) return;
+    const index = websitePreview.rowIndex as number;
+    const result = websitePreview.data as { name?: string; description?: string; website?: string };
+    const confirmedName = (websitePreview.data as {confirmedName?:string}).confirmedName?.trim();
+    QuickImportPreview(quickImportPreview.map((row, i) => i === index ? { ...row, ...(confirmedName ? { name: confirmedName } : {}), websiteUrl: row.websiteUrl || result.website || '' } : row));
+    WebsitePreview(null);
+    Notice('Confirmed public website fields added to the import preview. Review the business name and location before saving.');
   };
 
   const submit = async (event: FormEvent) => {
@@ -135,15 +164,12 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
       let nextBusinesses = [...working.current.businesses];
       let nextAnalyses = [...working.current.analyses];
       let added = 0;
-      for (const row of rows) {
-        const record = createBusinessRecord(row);
-        const existing = nextBusinesses.find(item => sameBusiness(item, record));
-        if (!existing) { nextBusinesses = [record, ...nextBusinesses]; added++; continue; }
-        nextBusinesses = nextBusinesses.map(item => item.id === existing.id ? { ...item, category: item.category || record.category, websiteUrl: item.websiteUrl || record.websiteUrl, websiteStatus: item.websiteStatus === 'unknown' ? record.websiteStatus : item.websiteStatus, rating: item.rating ?? record.rating, reviewCount: item.reviewCount ?? record.reviewCount, phone: item.phone || record.phone, email: item.email || record.email, profiles: [...new Set([...item.profiles, ...record.profiles])], sourceUrl: item.sourceUrl || record.sourceUrl, discoverySource: item.discoverySource || record.discoverySource, updatedAt: new Date().toISOString() } : item);
-        nextAnalyses = nextAnalyses.filter(item => item.businessId !== existing.id);
-      }
+      const result = importBusinessRows(rows, nextBusinesses);
+      const fresh = rows.map(row => createBusinessRecord(row));
+      for (const record of fresh) if (working.current.businesses.some(item => sameBusiness(item, record))) nextAnalyses = nextAnalyses.filter(a => !working.current.businesses.some(item => item.id === a.businessId && sameBusiness(item, record)));
+      nextBusinesses = result.businesses; added = result.added;
       await persist(nextBusinesses, nextAnalyses);
-      Notice(`${added} new businesses added; ${rows.length - added} matched existing records and were merged.`);
+      Notice(`${added} new businesses added; ${result.merged} matched existing records and were merged.`);
     } catch (e) { ErrorMessage(e instanceof Error ? e.message : 'CSV import failed.'); }
   };
 
@@ -399,23 +425,23 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
   const qualificationCounts = { ready: shortlist.filter(item => item.tier === 'ready').length, research: shortlist.filter(item => item.tier === 'research').length, verify: shortlist.filter(item => item.tier === 'verify').length, analyze: shortlist.filter(item => item.tier === 'analyze').length };
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
   return <div className="opportunity-workspace">
-    <div className="pagehead"><div><i>LEAD HUNTER V2</i><h1>Opportunity workspace</h1><p>Discover businesses, analyze opportunities, qualify prospects, research, prepare outreach, and track follow-ups — all in one place.</p></div></div>
+    <div className="pagehead"><div><i>LEAD HUNTER V2</i><h1>Prospecting pipeline</h1><p>Import a business, analyze its website, research what matters, qualify it, then prepare outreach and follow-ups.</p></div></div>
     <nav className="v2-workflow-nav" aria-label="Desktop workflow stages">
-      <a href="#v2-discover"><span>01</span> Discover</a>
-      <a href="#v2-import"><span>02</span> Import</a>
-      <a href="#v2-queue"><span>03</span> Analyze</a>
-      <a href="#v2-qualify"><span>04</span> Qualify & research</a>
-      <a href="#v2-followup"><span>05</span> Outreach & follow-ups</a>
+      <a href="#v2-import"><span>01</span> Quick Import</a>
+      <a href="#v2-queue"><span>02</span> Analyze</a>
+      <a href="#v2-qualify"><span>03</span> AI Research & qualify</a>
+      <a href="#v2-followup"><span>04</span> Outreach & follow-ups</a>
+      <button type="button" onClick={()=>{ExperimentalOSMOpen(true);MobileView('discover');}}>Experimental · Unreliable OSM tools</button>
     </nav>
     <nav className="v2-mobile-tabs" aria-label="Mobile workspace navigation">
       <button type="button" aria-current={mobileView==='home'?'page':undefined} onClick={()=>MobileView('home')}>⌂<span>Home</span></button>
-      <button type="button" aria-current={mobileView==='discover'?'page':undefined} onClick={()=>MobileView('discover')}>⌕<span>Discover</span></button>
+      <button type="button" aria-current={mobileView==='discover'?'page':undefined} onClick={()=>MobileView('discover')}>⌕<span>Import</span></button>
       <button type="button" aria-current={mobileView==='prospects'?'page':undefined} onClick={()=>MobileView('prospects')}>▤<span>Prospects</span></button>
       <button type="button" aria-current={mobileView==='followups'?'page':undefined} onClick={()=>MobileView('followups')}>◷<span>Follow-ups</span>{dueActivities.length>0&&<em>{dueActivities.length}</em>}</button>
     </nav>
     {mobileView==='home'&&<div className="v2-mobile-home">
-      <div className="v2-home-heading"><strong>Your next actions</strong><p>Move from discovery to a qualified opportunity.</p></div>
-      <button className="v2-action-card" type="button" onClick={()=>MobileView('discover')}><span>Find businesses</span><small>Search public business listings by location and category</small><b>Explore →</b></button>
+      <div className="v2-home-heading"><strong>Your next actions</strong><p>Move from a confirmed business source to a qualified opportunity.</p></div>
+      <button className="v2-action-card" type="button" onClick={()=>MobileView('discover')}><span>Quick Import</span><small>Add a business website or Maps listing reference</small><b>Import →</b></button>
       <button className="v2-action-card" type="button" onClick={()=>MobileView('prospects')}><span>Review opportunities</span><small>{businesses.length} saved · {qualificationCounts.ready} ready for review</small><b>Open →</b></button>
       <button className="v2-action-card" type="button" onClick={()=>MobileView('followups')}><span>Follow up</span><small>{dueActivities.length} overdue follow-ups to review</small><b>View →</b></button>
     </div>}
@@ -426,8 +452,16 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
       <div><strong>{dueActivities.length}</strong><span>Follow-ups due</span></div>
     </div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status" className="opportunity-notice">{notice}</p>}
-    <section id="v2-discover" className={`panel v2-view-panel ${mobileView==='discover'?'v2-mobile-active':''}`}>
-      <div className="between"><div><h2>1. Discover businesses</h2><p>Find public business listings by category and location, then import selected prospects and optionally analyze them automatically. Ratings are not supplied by OpenStreetMap.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
+    <section id="v2-import" className={`panel quick-import-panel v2-view-panel ${mobileView==='discover'?'v2-mobile-active':''}`}>
+      <div className="between"><div><h2>1. Quick Import</h2><p>Start with a business website or a Google Maps listing reference. Maps listings are stored as references; business information is never fetched from Maps.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
+      <label>Import one or more businesses<textarea rows={5} value={quickImportText} maxLength={50000} onChange={e=>{QuickImportText(e.target.value);QuickImportPreview(null);WebsitePreview(null);}} placeholder={'One per line:\nhttps://official-business.example | Business name | City\nhttps://www.google.com/maps/place/... | Business name | City\nBusiness name | City | https://official-business.example | https://maps.google.com/...'} /></label>
+      <p className="muted">Website URL; Maps link + business name + location; or business name | location | website URL | Maps reference. Lines can be pasted from a spreadsheet. Only public website HTML may be checked. No ratings or contact details are inferred.</p>
+      <div className="headbuttons"><button className="primary" disabled={!quickImportText.trim() || busy} onClick={previewQuickImport}>Review import</button><button className="secondary" onClick={()=>file.current?.click()}>Import CSV</button></div>
+      <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
+      {quickImportPreview && <div className="quick-import-preview"><h3>Review {quickImportPreview.length} business{quickImportPreview.length===1?'':'es'}</h3><p className="muted">Possible duplicates will be merged with saved prospects. Verify each name, location, and source before saving.</p>{quickImportPreview.map((row,index)=><article key={`${row.name}-${index}`} className="quick-import-row"><strong>{row.name}</strong><span>{row.location || 'Location not provided — add it to support duplicate matching'}</span>{row.websiteUrl&&<a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">{row.websiteUrl}</a>}{row.sourceUrl&&<a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">Listing reference</a>}{row.discoverySource==='Official website (user supplied)'&&<button className="secondary" disabled={busy} onClick={()=>void extractWebsite(index,row.websiteUrl||'')}>Read public website details</button>}{websitePreview?.rowIndex===index&&<div className="website-extract-review"><p>Public website HTML observed:</p><label>Business name suggestion<input value={String((websitePreview.data as {confirmedName?:string}).confirmedName ?? (websitePreview.data as {name?:string}).name ?? '')} onChange={e=>WebsitePreview({...websitePreview,data:{...(websitePreview.data as object),confirmedName:e.target.value}})}/></label><label>Page description<textarea rows={2} readOnly value={String((websitePreview.data as {description?:string}).description||'Not found')}/></label><button className="secondary" onClick={applyWebsitePreview}>Use confirmed website details</button></div>}</article>)}<div className="headbuttons"><button className="primary" disabled={busy} onClick={()=>void saveQuickImport()}>Save to workspace</button><button className="secondary" onClick={()=>{QuickImportPreview(null);WebsitePreview(null);}}>Cancel</button></div></div>}
+      <details className="experimental-osm" open={experimentalOSMOpen} onToggle={e=>ExperimentalOSMOpen(e.currentTarget.open)}><summary>Experimental Tools — OpenStreetMap discovery (unreliable)</summary>
+      <section id="v2-discover" className="experimental-osm-body">
+      <div className="between"><div><h3>OpenStreetMap candidate search</h3><p>Experimental and unreliable: coverage can be incomplete, outdated, or unavailable. Normal prospecting does not depend on this service.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
       <div className="formgrid">
         <label>Business category<input list="v2-discovery-categories" value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. builder, gym, dentist"/><datalist id="v2-discovery-categories">{['builder','construction company','architect','electrician','plumber','interior designer','dentist','restaurant','cafe','hotel','gym','pharmacy','beauty salon','real estate agency','school','supermarket'].map(item=><option key={item} value={item}/>)}</datalist></label>
         <label>City or administrative area<input value={location} maxLength={120} onChange={e => Location(e.target.value)} placeholder="e.g. Ludhiana"/></label>
@@ -460,11 +494,10 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
         <div className="headbuttons"><button className="primary" disabled={busy || !selectedOSM.length} onClick={() => {cancelBatch.current = false; void importOSM();}}>Import {selectedOSM.length} selected {autoAnalyzeOSM ? 'and analyze' : 'businesses'}</button><button className="secondary" disabled={busy} onClick={() => {OSMResults([]);SelectedOSM([]);}}>Discard results</button>{busy && <button className="secondary" onClick={() => {cancelBatch.current = true;}}>Stop after current business</button>}</div>
       </>}
       <p className="muted">Supported types include builder, construction company, architect, electrician, plumber, painter, carpenter, interior designer, dentist, restaurant, cafe, hotel, gym, and other common services. OpenStreetMap coverage varies by area.</p>
-    </section>
-    <div className={`v2-mobile-import-control ${mobileView==='discover'?'v2-import-visible':''}`}><button type="button" className="secondary" onClick={()=>ShowImport(value=>!value)} aria-expanded={showImport}>{showImport?'Hide manual import':'Add a business manually or import CSV'}</button></div>
-    <section id="v2-import" className={`panel v2-view-panel ${mobileView==='discover'&&showImport?'v2-mobile-active':''}`}>
-      <div className="between"><div><h2>Add businesses</h2><p>Website URL is optional. Keep the source of each business and its reputation data so opportunities can be verified later.</p></div><div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button><button className="secondary" onClick={() => file.current?.click()}>Import business CSV</button></div></div>
-      <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
+      </section></details>
+      <details className="more-import-options"><summary>More import options — individual fields, previous prospects</summary>
+      <div className="headbuttons"><button className="secondary" disabled={!data.candidates.length} onClick={() => void importExistingCandidates()}>Import existing website prospects ({data.candidates.length})</button></div>
+      <div className="between"><div><h3>Individual business fields</h3><p>Use these fields for an already researched business.</p></div></div>
       <form onSubmit={submit}>
         <div className="formgrid">
           <label>Business name<input required value={name} onChange={e => Name(e.target.value)} placeholder="e.g. City Dental Clinic"/></label>
@@ -479,10 +512,10 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
         </div>
         <div className="headbuttons"><button className="primary" type="submit">Save business</button><button className="secondary" type="button" onClick={() => navigator.clipboard.writeText(csvTemplate).then(() => Notice('CSV template copied.')).catch(() => ErrorMessage('Could not copy CSV template.'))}>Copy CSV template</button>{searchQuery && <><a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Search Google Maps</a><a className="secondary" href={`https://www.google.com/search?q=${encodeURIComponent(searchQuery + ' business')}`} target="_blank" rel="noopener noreferrer">Search Google</a></>}</div>
       </form>
-      <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p>
+      <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p></details>
     </section>
     <section id="v2-qualify" className={`panel v2-view-panel ${mobileView==='prospects'?'v2-mobile-active':''}`}>
-      <div className="between"><div><h2>3. Qualification shortlist</h2><p>Evidence-first ranking for outreach decisions. Scores are signals, not proof; no messages are sent automatically.</p></div><span className="muted">{qualificationCounts.ready} ready for review · {qualificationCounts.research} research next</span></div>
+      <div className="between"><div><h2>3. AI Research & qualify</h2><p>Use the portable AI research workbench on analyzed prospects, then review evidence and qualify each opportunity. Research claims require source checks.</p></div><span className="muted">{qualificationCounts.ready} ready for review · {qualificationCounts.research} research next</span></div>
       <div className="headbuttons"><label>Qualification stage<select value={qualificationFilter} onChange={e => QualificationFilter(e.target.value as QualificationTier | 'all')}><option value="all">All ({shortlist.length})</option><option value="ready">Ready for human review ({qualificationCounts.ready})</option><option value="research">Research next ({qualificationCounts.research})</option><option value="verify">Verify details ({qualificationCounts.verify})</option><option value="analyze">Needs analysis ({qualificationCounts.analyze})</option></select></label></div>
       {!shortlisted.length && <p className="muted">No businesses in this qualification stage yet.</p>}
       <div className="opportunity-list">{shortlisted.slice(0,40).map(item => <article key={item.business.id} className="panel opportunity-card">
@@ -511,7 +544,7 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
     </section>
     <section id="v2-followup" className={`panel v2-view-panel ${mobileView==='followups'?'v2-mobile-active':''}`}><div className="between"><div><h2>4. Outreach follow-ups</h2><p>{outreachActivities.length} businesses tracked · {dueActivities.length} overdue follow-ups. All outreach is logged manually; no messages are sent automatically.</p></div></div>{dueActivities.length ? <div className="opportunity-list">{dueActivities.slice(0,25).map(activity => {const business=businesses.find(b=>b.id===activity.businessId);return business && <article key={activity.businessId} className="opportunity-card"><div className="between"><div><h3>{business.name}</h3><p>Follow-up due {activity.nextFollowUpAt.slice(0,10)} · {activity.stage} · {activity.channel}</p></div><button className="secondary" onClick={()=>editActivity(activity.businessId)}>Update activity</button></div>{activity.note && <p>{activity.note}</p>}{activityBusinessId === activity.businessId && <p className="muted">Edit this business's outreach activity in the qualification shortlist above.</p>}</article>})}</div> : <p className="muted">No overdue follow-ups. Use “Track outreach” on a qualified prospect to log actual contact and schedule the next action.</p>}</section>
     <section id="v2-queue" className={`panel v2-view-panel ${mobileView==='prospects'?'v2-mobile-active':''}`}>
-      <div className="between"><div><h2>5. Prioritized opportunity queue</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
+      <div className="between"><div><h2>2. Analyze prospects</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
       <p className="muted">Analyze up to 25 pending businesses per run. Successful results are saved individually; failed scans remain pending for retry. Keep this tab open during processing.</p>
       {queueProgress && <div className="opportunity-notice" role="status"><strong>Processing {queueProgress.done + queueProgress.failed + 1} of {queueProgress.total}</strong> · {queueProgress.current} · {queueProgress.done} saved · {queueProgress.failed} failed <progress max={queueProgress.total} value={queueProgress.done + queueProgress.failed}/></div>}
       {Object.keys(queueFailures).length > 0 && <div className="opportunity-notice"><div className="between"><strong>{Object.keys(queueFailures).length} businesses need attention</strong><button className="secondary" disabled={busy} onClick={() => void retryFailures()}>Retry failed analyses</button></div><ul>{businesses.filter(b => queueFailures[b.id]).slice(0,10).map(b => <li key={b.id}><b>{b.name}:</b> {queueFailures[b.id]}</li>)}</ul></div>}
