@@ -62,6 +62,8 @@ export type OpportunityAnalysis = {
   totalScore: number;
   reputationScore: number;
   evidenceConfidence: number;
+  /** Optional for analyses saved before score explainability was added. */
+  scoreBreakdown?: OpportunityScoreBreakdown;
   analyzedAt: string;
   researchPrompt: string;
   researchNotes?: ImportedResearch | null;

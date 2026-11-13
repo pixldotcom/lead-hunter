@@ -36,7 +36,13 @@ export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis
   const analysis = value as unknown as OpportunityAnalysis;
   if (analysis.scoreBreakdown !== undefined) {
     const breakdown=analysis.scoreBreakdown;
-    if (!isObject(breakdown) || !['total','websiteNeed','reputation','serviceEvidence','confidence','bestService'].every(key => typeof breakdown[key]==='number' && Number.isFinite(breakdown[key]) && breakdown[key]>=0 && breakdown[key]<=100) || !isObject(breakdown.weighted) || !['websiteNeed','reputation','bestService','confidence'].every(key => typeof breakdown.weighted[key]==='number' && Number.isFinite(breakdown.weighted[key]) && breakdown.weighted[key]>=0 && breakdown.weighted[key]<=100) || !Array.isArray(breakdown.explanation) || breakdown.explanation.some(item=>!isText(item))) throw Error('Invalid opportunity score breakdown.');
+    if (!isObject(breakdown)) throw Error('Invalid opportunity score breakdown.');
+    const scoreKeys=['total','websiteNeed','reputation','serviceEvidence','confidence','bestService'];
+    if (!scoreKeys.every(key => typeof breakdown[key]==='number' && Number.isFinite(breakdown[key]) && breakdown[key]>=0 && breakdown[key]<=100)) throw Error('Invalid opportunity score breakdown.');
+    const weighted=breakdown.weighted;
+    if (!isObject(weighted) || !['websiteNeed','reputation','bestService','confidence'].every(key => typeof weighted[key]==='number' && Number.isFinite(weighted[key]) && weighted[key]>=0 && weighted[key]<=100)) throw Error('Invalid opportunity score breakdown.');
+    const explanation=breakdown.explanation;
+    if (!Array.isArray(explanation) || explanation.some(item=>!isText(item))) throw Error('Invalid opportunity score breakdown.');
   }
   if (analysis.researchNotes != null) {
     const notes = analysis.researchNotes;
