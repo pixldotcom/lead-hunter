@@ -1,5 +1,5 @@
 import { parseCsv, uid } from './domain.ts';
-import { PIPELINE_STAGES, type BusinessRecord, type OpportunityAnalysis, type OpportunityEvidence, type ServiceArea, type WebsiteStatus, type EvidenceConfidence, type OpportunityPriority } from './opportunityModel.ts';
+import { PIPELINE_STAGES, type BusinessRecord, type OpportunityAnalysis, type OpportunityEvidence, type ServiceArea, type WebsiteStatus, type EvidenceConfidence, type OpportunityPriority, type ImportedResearch } from './opportunityModel.ts';
 
 const services: ServiceArea[] = ['website', 'seo', 'local_seo', 'performance', 'marketing'];
 const websiteStatuses: WebsiteStatus[] = ['no_website_found', 'outdated', 'needs_improvement', 'healthy', 'unknown'];
@@ -31,6 +31,16 @@ function validateEvidence(value: unknown): OpportunityEvidence {
   return evidence;
 }
 
+function validImportedResearch(value: unknown): value is ImportedResearch {
+  if (!isObject(value) || !isText(value.summary) || value.summary.length > 4000 || !Array.isArray(value.facts) || value.facts.length > 30 || value.facts.some(f => !isObject(f) || !isText(f.claim) || f.claim.length > 500 || !isText(f.sourceUrl) || (f.sourceUrl && !/^https?:\/\//i.test(f.sourceUrl))) || !Array.isArray(value.hypotheses) || value.hypotheses.length > 30 || value.hypotheses.some(x => !isText(x) || x.length > 500) || !Array.isArray(value.unknowns) || value.unknowns.length > 30 || value.unknowns.some(x => !isText(x) || x.length > 500) || !Array.isArray(value.nextSteps) || value.nextSteps.length > 20 || value.nextSteps.some(x => !isText(x) || x.length > 500) || !validDate(value.importedAt)) return false;
+  return true;
+}
+
+export function appendResearchRevision(analysis: OpportunityAnalysis, notes: ImportedResearch): OpportunityAnalysis {
+  const previous = [...(analysis.researchHistory ?? []), ...(analysis.researchNotes ? [analysis.researchNotes] : [])];
+  return { ...analysis, researchNotes: notes, researchHistory: previous.slice(-20) };
+}
+
 export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis {
   if (!isObject(value) || !isText(value.businessId) || !websiteStatuses.includes(value.websiteStatus as WebsiteStatus) || !Array.isArray(value.opportunities) || !Array.isArray(value.evidence) || typeof value.totalScore !== 'number' || !Number.isFinite(value.totalScore) || value.totalScore < 0 || value.totalScore > 100 || typeof value.reputationScore !== 'number' || !Number.isFinite(value.reputationScore) || value.reputationScore < 0 || value.reputationScore > 100 || typeof value.evidenceConfidence !== 'number' || !Number.isFinite(value.evidenceConfidence) || value.evidenceConfidence < 0 || value.evidenceConfidence > 100 || !validDate(value.analyzedAt) || !isText(value.researchPrompt)) throw Error('Invalid opportunity analysis.');
   const analysis = value as unknown as OpportunityAnalysis;
@@ -44,10 +54,8 @@ export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis
     const explanation=breakdown.explanation;
     if (!Array.isArray(explanation) || explanation.some(item=>!isText(item))) throw Error('Invalid opportunity score breakdown.');
   }
-  if (analysis.researchNotes != null) {
-    const notes = analysis.researchNotes;
-    if (!isObject(notes) || !isText(notes.summary) || notes.summary.length > 4000 || !Array.isArray(notes.facts) || notes.facts.length > 30 || notes.facts.some(f => !isObject(f) || !isText(f.claim) || f.claim.length > 500 || !isText(f.sourceUrl) || (f.sourceUrl && !/^https?:\/\//i.test(f.sourceUrl))) || !Array.isArray(notes.hypotheses) || notes.hypotheses.length > 30 || notes.hypotheses.some(x => !isText(x) || x.length > 500) || !Array.isArray(notes.unknowns) || notes.unknowns.length > 30 || notes.unknowns.some(x => !isText(x) || x.length > 500) || !Array.isArray(notes.nextSteps) || notes.nextSteps.length > 20 || notes.nextSteps.some(x => !isText(x) || x.length > 500) || !validDate(notes.importedAt)) throw Error('Invalid imported research notes.');
-  }
+  if (analysis.researchNotes != null && !validImportedResearch(analysis.researchNotes)) throw Error('Invalid imported research notes.');
+  if (analysis.researchHistory !== undefined && (!Array.isArray(analysis.researchHistory) || analysis.researchHistory.length > 20 || analysis.researchHistory.some(version => !validImportedResearch(version)))) throw Error('Invalid research history.');
   if (analysis.opportunities.length !== services.length || analysis.opportunities.some(item => !isObject(item) || !services.includes(item.service) || !priorities.includes(item.priority) || !Number.isFinite(item.score) || item.score < 0 || item.score > 100 || !Array.isArray(item.evidenceIds) || item.evidenceIds.some(id => !isText(id)) || !isText(item.rationale))) throw Error('Invalid service opportunity records.');
   analysis.evidence.forEach(validateEvidence);
   return analysis;
