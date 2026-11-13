@@ -417,3 +417,33 @@ a,.linkbtn{color:var(--brand-orange)}
  .opportunities-page{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
  .v2-workflow-nav{display:none}
 }
+
+
+/* V2 workspace polish: compact empty states, balanced cards and clear PixlDot accents. */
+.opportunities-page>.pagehead,.prospect-page>.pagehead{padding:4px 2px 2px}
+.opportunities-page>.pagehead h1,.prospect-page>.pagehead h1{letter-spacing:-.035em}
+.opportunities-page>.pagehead i,.prospect-page>.pagehead i{color:var(--brand-orange)}
+.opportunity-workspace .v2-overview>div{border-top:2px solid color-mix(in srgb,var(--brand-blue) 75%,var(--brand-orange));background:linear-gradient(145deg,var(--brand-blue-tint),var(--panel) 72%)}
+.opportunity-workspace>#v2-discover{background:linear-gradient(140deg,color-mix(in srgb,var(--brand-blue) 9%,var(--panel)),var(--panel) 48%)}
+.opportunity-workspace>#v2-import{background:linear-gradient(140deg,color-mix(in srgb,var(--brand-orange) 7%,var(--panel)),var(--panel) 42%)}
+.opportunity-workspace .discovery-search-form .formgrid{margin:16px 0 12px}
+.opportunity-workspace .discovery-search-form input:focus-visible,.opportunity-workspace .discovery-search-form select:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
+.opportunity-card,.pipeline-card,.followup-card{transition:border-color .16s ease,transform .16s ease}
+.opportunity-card:hover,.pipeline-card:hover,.followup-card:hover{border-color:color-mix(in srgb,var(--brand-blue) 50%,var(--line))}
+.opportunity-card .opportunity-score{border-left:3px solid var(--brand-blue);background:linear-gradient(100deg,var(--brand-blue-tint),color-mix(in srgb,var(--brand-orange) 6%,var(--panel)))}
+.pipeline-lane{border-top:2px solid color-mix(in srgb,var(--brand-blue) 70%,var(--brand-orange))}
+.pipeline-card,.followup-card{box-shadow:0 8px 24px #0002}
+.followup-section{background:linear-gradient(145deg,color-mix(in srgb,var(--brand-blue) 5%,var(--panel)),var(--panel) 65%)}
+.followup-section>.empty{min-height:0;margin:0;padding:14px 12px;text-align:left;border-radius:8px;background:color-mix(in srgb,var(--panel) 72%,transparent);font-size:.8rem}
+.followup-section:has(>.empty){padding-bottom:12px}
+.followup-section>h2 span{background:var(--brand-blue-tint);color:#dfe5ff;border:1px solid color-mix(in srgb,var(--brand-blue) 35%,var(--line))}
+.delete-prospect-backdrop{position:fixed;inset:0;z-index:140;display:grid;place-items:center;padding:18px;background:rgba(5,6,12,.78);backdrop-filter:blur(7px)}
+.delete-prospect-dialog{width:min(100%,460px);padding:24px;border:1px solid color-mix(in srgb,var(--brand-blue) 40%,var(--line));border-radius:16px;background:linear-gradient(145deg,#171a2a,var(--panel) 58%);box-shadow:0 24px 80px #0009}
+.delete-prospect-dialog h2{margin:12px 0 8px;font:600 1.35rem 'Space Grotesk'}
+.delete-prospect-dialog p{line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
+.delete-prospect-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:color-mix(in srgb,var(--brand-orange) 20%,var(--panel));color:var(--brand-orange);font-weight:800}
+.delete-prospect-dialog .headbuttons{justify-content:flex-end;margin-top:18px}
+.danger-outline{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:7px 11px;border:1px solid color-mix(in srgb,#d85b55 65%,var(--line));border-radius:7px;background:transparent;color:#ffaaa3;font-size:.7rem;font-weight:650}
+.danger-outline:hover{background:rgba(216,91,85,.12)}
+@media(max-width:767px){.opportunities-page>.pagehead,.prospect-page>.pagehead{padding:0 2px}.followup-section>.empty{padding:12px}.delete-prospect-dialog{padding:20px}.opportunity-workspace .discovery-search-form .headbuttons>*{flex:1 1 auto}}
+@media(prefers-reduced-motion:reduce){.opportunity-card,.pipeline-card,.followup-card{transition:none}}
