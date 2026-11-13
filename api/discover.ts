@@ -12,12 +12,12 @@ const categories: Record<string, [string, string]> = {
   'travel agency':['shop','travel_agency'], 'clothing store':['shop','clothes'],
   supermarket:['shop','supermarket'], school:['amenity','school'],
 };
-function buildOverpassQuery(category: string, location: string): string {
+function buildOverpassQuery(category: string, location: string, center?: {lat:number;lon:number}): string {
   const tag = categories[category.trim().toLowerCase()];
   if (!tag) throw Error('Unsupported category. Choose a category listed in the discovery form.');
   if (!location.trim() || category.length > 80 || location.length > 120) throw Error('Enter a valid category and location.');
   const area = location.trim().replace(/["\\]/g,' ').replace(/\s+/g,' ');
-  return `[out:json][timeout:20];\narea["name"="${area}"]["boundary"="administrative"]->.searchArea;\n(nwr["${tag[0]}"="${tag[1]}"](area.searchArea););\nout center tags 101;`;
+  if (center) return `[out:json][timeout:12];(nwr["${tag[0]}"="${tag[1]}"](around:7000,${center.lat},${center.lon}););out center tags 101;`;\n  return `[out:json][timeout:12];\\narea["name"="${area}"]["boundary"="administrative"]->.searchArea;\\n(nwr["${tag[0]}"="${tag[1]}"](area.searchArea););\\nout center tags 101;`;
 }
 type Element = {type:'node'|'way'|'relation';id:number;lat?:number;lon?:number;center?:{lat:number;lon:number};tags?:Record<string,string>};
 function parseOverpassBusinesses(payload: unknown, category: string, location: string) {
@@ -34,6 +34,21 @@ function parseOverpassBusinesses(payload: unknown, category: string, location: s
 }
 
 
+// Resolve a city once per request; bounded radius queries avoid expensive administrative-area scans.
+async function geocodeCity(location: string): Promise<{lat:number;lon:number}|null> {
+  try {
+    const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(location) + '&limit=5&lang=en';
+    const response = await fetch(url,{headers:{accept:'application/json'},signal:AbortSignal.timeout(3500)});
+    if (!response.ok) return null;
+    const data = await response.json() as {features?:Array<{geometry?:{coordinates?:number[]};properties?:{name?:string;city?:string;country?:string;type?:string}}>} ;
+    const target = location.trim().toLowerCase();
+    const candidates = data.features ?? [];
+    const match = candidates.find(x => [x.properties?.name,x.properties?.city].some(name => name?.toLowerCase()===target)) ?? candidates[0];
+    const coords=match?.geometry?.coordinates;
+    if (!coords || coords.length<2 || !Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return null;
+    return {lat:coords[1],lon:coords[0]};
+  } catch {return null;}
+}
 const endpoints = [
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
@@ -64,7 +79,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (error) {
     respond({error:error instanceof Error ? error.message : 'Invalid search request.'},400);return;
   }
-  let lastError = 'The public discovery services are unavailable.';
+  const center = await geocodeCity(location);\n  if (center) query = buildOverpassQuery(category, location, center);\n  let lastError = 'The public discovery services are unavailable.';
   // Keep the complete request within the serverless execution window.
   const deadline = Date.now() + 16000;
   for (const endpoint of endpoints) {
