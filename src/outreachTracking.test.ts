@@ -11,7 +11,19 @@ describe('outreach activity tracking',()=>{
   expect(()=>validateOutreachActivities([{...activity,businessId:'missing'}],[business])).toThrow();
   expect(()=>validateOutreachActivities([activity,activity],[business])).toThrow();
  });
- it('upserts activity without duplicating a business',()=>expect(upsertOutreachActivity([activity],{...activity,stage:'replied'})).toEqual([{...activity,stage:'replied'}]));
+ it('upserts activity without duplicating a business and appends contact history',()=>{
+  const first=upsertOutreachActivity([],{...activity,stage:'drafted',lastContactAt:''});
+  const next=upsertOutreachActivity(first,{...activity,stage:'contacted'});
+  expect(next).toHaveLength(1);
+  expect(next[0].history).toHaveLength(2);
+  expect(next[0].history?.map(event=>event.kind)).toEqual(['scheduled','contact']);
+  expect(validateOutreachActivities(next,[business])).toEqual(next);
+ });
+ it('validates bounded history embedded in the canonical activity record',()=>{
+  const valid={...activity,history:[{id:'event-1',kind:'contact' as const,occurredAt:activity.updatedAt,stage:activity.stage,channel:activity.channel,lastContactAt:activity.lastContactAt,nextFollowUpAt:activity.nextFollowUpAt,note:activity.note}]};
+  expect(validateOutreachActivities([valid],[business])).toEqual([valid]);
+  expect(()=>validateOutreachActivities([{...activity,history:Array.from({length:201},(_,i)=>({...valid.history[0],id:`event-${i}`}))}],[business])).toThrow();
+ });
  it('flags overdue follow-ups, but not closed or won prospects',()=>{
   const now=new Date('2026-11-13T12:00:00.000Z');
   expect(followUpStatus(activity,now)).toBe('overdue');

@@ -2,6 +2,8 @@ export type WebsiteStatus = 'no_website_found' | 'outdated' | 'needs_improvement
 export type ServiceArea = 'website' | 'seo' | 'local_seo' | 'performance' | 'marketing';
 export type EvidenceConfidence = 'confirmed' | 'likely' | 'unknown';
 export type OpportunityPriority = 'high' | 'medium' | 'low' | 'unverified';
+export const PIPELINE_STAGES = ['new','researching','qualified','ready_to_pitch','contacted','negotiating','won','lost'] as const;
+export type PipelineStage = typeof PIPELINE_STAGES[number];
 
 export type BusinessRecord = {
   id: string;
@@ -19,6 +21,8 @@ export type BusinessRecord = {
   sourceUrl: string;
   discoveredAt: string;
   updatedAt: string;
+  /** Optional workflow state; omitted legacy records are derived from analysis and outreach history. */
+  pipelineStage?: PipelineStage;
 };
 
 export type OpportunityEvidence = {
