@@ -80,7 +80,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (error) {
     respond({error:error instanceof Error ? error.message : 'Invalid search request.'},400);return;
   }
-  const center = await geocodeCity(location);\n  if (center) query = buildOverpassQuery(category, location, center);\n  let lastError = 'The public discovery services are unavailable.';
+  const center = await geocodeCity(location);
+  if (center) query = buildOverpassQuery(category, location, center);
+  let lastError = 'The public discovery services are unavailable.';
   // Keep the complete request within the serverless execution window.
   const deadline = Date.now() + 16000;
   for (const endpoint of endpoints) {
