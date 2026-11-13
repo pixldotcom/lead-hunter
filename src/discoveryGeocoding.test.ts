@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectGeocodedCenter } from './discover';
+import { selectGeocodedCenter } from '../api/discover';
 
 describe('discovery locality geocoding', () => {
   it('uses an exact city match when a location includes a region or country', () => {
