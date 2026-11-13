@@ -325,3 +325,12 @@ a,.linkbtn{color:var(--brand-orange)}
 .discovery-review-evidence{font-size:.73rem}
 .discovery-review-detail a{font-size:.75rem}
 @media(max-width:767px){.discovery-review-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.discovery-review-tabs button{font-size:.68rem;padding:10px 8px}.discovery-review-card{padding:13px}.discovery-review-list{max-height:55svh}}
+
+
+/* Website verification workbench: source-first, mobile-safe, no automated claims. */
+.discovery-verification-tools{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.discovery-verification-tools a{font-size:.75rem;text-decoration:underline;text-underline-offset:3px}
+.discovery-verification-entry{display:grid;gap:6px;margin-top:5px;width:100%;min-width:0}
+.discovery-verification-entry>span{font-size:.7rem;color:var(--muted);line-height:1.4}
+.discovery-verification-entry input{width:100%;min-width:0;max-width:480px;min-height:44px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel);color:var(--text);font-size:.8rem}
+@media(max-width:767px){.discovery-verification-entry input{max-width:100%}.discovery-verification-tools{gap:9px}}
