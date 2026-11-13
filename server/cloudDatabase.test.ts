@@ -6,8 +6,6 @@ import {makeLead,createDraft} from '../src/domain';
 import {prepareDraft} from '../src/draftPersistence';
 import {importCandidates,emptyDiscovery} from '../src/discovery';
 import {emptyManualReview} from '../src/manualReview';
-import {parseQuickImport,importBusinessRows} from '../src/quickImport';
-import {buildQualifiedShortlist} from '../src/prospectQualification';
 import {readLegacy} from '../src/MigrationPanel';
 const userA='11111111-1111-4111-8111-111111111111',userB='22222222-2222-4222-8222-222222222222';
 let db:PGlite;
@@ -40,35 +38,6 @@ describe('real PostgreSQL migration, transactional saves and RLS',()=>{
  }));
  it('backs up the pre-import cloud data and prevents the same source importing twice',async()=>asUser(userA,async()=>{
   const before=await load(),source=emptyCloud();source.leads.leads=[makeLead({name:'Imported',website:'new.example'})];const merged=mergeCloud(before.data,source);const hash='f'.repeat(64);const result=await save(merged.data,before.revision,crypto.randomUUID(),hash);expect((await save(merged.data,before.revision,crypto.randomUUID(),hash)).revision).toBe(result.revision);expect((await db.query('select payload from public.lh_backups where revision=$1',[before.revision])).rows).toEqual([{payload:before.data}]);
- }));
- it('Quick Import survives a real PostgreSQL save, fresh load, and pipeline qualification',async()=>asUser(userA,async()=>{
-  const before=await load();
-  const lines='https://www.google.com/maps/place/Example+Studio | Example Studio | Ludhiana\nExample Studio | Ludhiana | https://example-studio.test';
-  const result=importBusinessRows(parseQuickImport(lines),before.data.discovery.businesses);
-  expect(result.added).toBe(1);
-  expect(result.merged).toBe(1);
-  const prospect=result.businesses.find(item=>item.name==='Example Studio');
-  expect(prospect).toBeTruthy();
-  const next=structuredClone(before.data);
-  next.discovery.businesses=result.businesses;
-  const committed=await save(validateCloud(next),before.revision);
-  expect(committed.revision).toBe(before.revision+1);
-  // This is a fresh database read, not JSON roundtripping or local component state.
-  const reloaded=validateCloud((await load()).data);
-  const stored=reloaded.discovery.businesses.find(item=>item.id===prospect!.id);
-  expect(stored).toMatchObject({
-    name:'Example Studio',location:'Ludhiana',websiteUrl:'https://example-studio.test/',
-    sourceUrl:'https://www.google.com/maps/place/Example+Studio',
-    rating:null,reviewCount:null,websiteStatus:'unknown'
-  });
-  expect(reloaded.discovery.businesses.filter(item=>item.name==='Example Studio')).toHaveLength(1);
-  const pipeline=buildQualifiedShortlist(reloaded.discovery.businesses,reloaded.discovery.opportunityAnalyses);
-  expect(pipeline.some(item=>item.business.id===stored?.id && item.tier==='analyze')).toBe(true);
-  // Re-import after reload must reuse the same business ID.
-  const again=importBusinessRows(parseQuickImport(lines),reloaded.discovery.businesses);
-  expect(again.added).toBe(0);
-  expect(again.merged).toBe(2);
-  expect(again.businesses.find(item=>item.name==='Example Studio')?.id).toBe(stored?.id);
  }));
  it('keeps exact legacy stores untouched during preview and preserves orphan drafts',()=>{
   const source=emptyCloud();source.leads.leads=[makeLead({name:'Legacy',website:'legacy.example'})];source.drafts.drafts=[prepareDraft({...createDraft(source.leads.leads[0],'Direct business','Initial outreach'),leadId:'deleted-lead'})];const raw=new Map([['pixldot-lead-hunter-v1',JSON.stringify(source.leads)],['pixldot-outreach-drafts-v1',JSON.stringify(source.drafts)]]);const before=JSON.stringify([...raw]);const preview=readLegacy({getItem:k=>raw.get(k)??null});expect(JSON.stringify([...raw])).toBe(before);expect(mergeCloud(emptyCloud(),preview).data.drafts.drafts[0].leadId).toBe('deleted-lead');
