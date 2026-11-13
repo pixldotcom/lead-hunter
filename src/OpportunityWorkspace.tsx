@@ -31,8 +31,27 @@ const serviceForFinding = (finding: { category: string; title: string; explanati
   return 'website';
 };
 
+type BusinessWorkflowStep = 'discover'|'import'|'analyze'|'qualify'|'outreach'|'all';
+const businessWorkflowStep = (): BusinessWorkflowStep => {
+  const value = new URLSearchParams(window.location.search).get('workflow');
+  return value === 'discover' || value === 'import' || value === 'analyze' || value === 'qualify' || value === 'outreach' || value === 'all' ? value : 'discover';
+};
+
 export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initialView?: 'home'|'prospects'|'followups'|'pipeline'|'opportunities'; onNavigate?: (page:string)=>void}) {
   const activeView = initialView === 'prospects' || initialView === 'pipeline' ? 'pipeline' : initialView === 'followups' ? 'followups' : 'opportunities';
+  const [workflowStep, SetWorkflowStep] = useState<BusinessWorkflowStep>(businessWorkflowStep);
+  useEffect(() => {
+    const syncStep = () => SetWorkflowStep(businessWorkflowStep());
+    window.addEventListener('popstate', syncStep);
+    return () => window.removeEventListener('popstate', syncStep);
+  }, []);
+  const selectWorkflowStep = (step: BusinessWorkflowStep) => {
+    SetWorkflowStep(step);
+    const url = new URL(window.location.href);
+    url.searchParams.set('workflow', step);
+    window.history.pushState({ workflow: step }, '', url.toString());
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const cloud = useCloud();
   const data = cloud.snapshot.data.discovery;
   const businesses = data.businesses ?? [];
@@ -450,14 +469,15 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
   const csvTemplate = 'name,category,location,website,rating,reviewCount,phone,email,websiteStatus,sourceUrl,discoverySource\nExample Dental,dentist,Ludhiana,,4.7,186,9876543210,,no_website_found,https://example.com/listing,Google Maps listing';
   if (activeView === 'pipeline') return <PipelinePage onNavigate={onNavigate}/>;
   if (activeView === 'followups') return <FollowupsPage onNavigate={onNavigate}/>;
-  return <div className="opportunity-workspace opportunities-page">
+  return <div className={`opportunity-workspace opportunities-page workflow-focus-${workflowStep}`}>
     <div className="pagehead"><div><i>BUSINESS WORKSPACE</i><h1>Business Opportunities</h1><p>Discover and import real businesses, analyze their public websites, review research, and qualify opportunities.</p></div></div>
-    <nav className="v2-workflow-nav" aria-label="Desktop workflow stages">
-      <a href="#v2-discover"><span>01</span> Discover businesses</a><a href="#v2-import"><span>02</span> Quick Import</a>
-      <a href="#v2-queue"><span>03</span> Analyze</a>
-      <a href="#v2-qualify"><span>04</span> AI Research & qualify</a>
-      <a href="#v2-followup"><span>05</span> Outreach & follow-ups</a>
-      
+    <nav className="v2-workflow-nav" aria-label="Business workflow stages">
+      <button type="button" data-workflow-step="discover" aria-pressed={workflowStep === 'discover'} onClick={() => selectWorkflowStep('discover')}><span>01</span> Discover <small>{businesses.length}</small></button>
+      <button type="button" data-workflow-step="import" aria-pressed={workflowStep === 'import'} onClick={() => selectWorkflowStep('import')}><span>02</span> Import</button>
+      <button type="button" data-workflow-step="analyze" aria-pressed={workflowStep === 'analyze'} onClick={() => selectWorkflowStep('analyze')}><span>03</span> Analyze <small>{businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length}</small></button>
+      <button type="button" data-workflow-step="qualify" aria-pressed={workflowStep === 'qualify'} onClick={() => selectWorkflowStep('qualify')}><span>04</span> Research & qualify</button>
+      <button type="button" data-workflow-step="outreach" aria-pressed={workflowStep === 'outreach'} onClick={() => selectWorkflowStep('outreach')}><span>05</span> Outreach <small>{dueActivities.length}</small></button>
+      <button type="button" data-workflow-step="all" aria-pressed={workflowStep === 'all'} onClick={() => selectWorkflowStep('all')}>All stages</button>
     </nav>
     <WorkspaceMobileTabs active="opportunities" onNavigate={onNavigate} dueCount={dueActivities.length}/>
     <div className="v2-overview" aria-label="Workspace overview">
@@ -559,6 +579,15 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
 
       </article>)}</div>
       {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
+    </section>
+    <section id="v2-followup" className="panel v2-view-panel workflow-outreach-panel">
+      <div className="between"><div><h2>5. Outreach & follow-ups</h2><p>Keep each prospect’s outreach history, pipeline stage, and next action on the same saved business record.</p></div></div>
+      <div className="workflow-outreach-summary">
+        <div><strong>{businesses.filter(b => !!b.pipelineStage).length}</strong><span>In pipeline</span></div>
+        <div><strong>{outreachActivities.length}</strong><span>Businesses with contact history</span></div>
+        <div><strong>{dueActivities.length}</strong><span>Overdue follow-ups</span></div>
+      </div>
+      <div className="headbuttons"><button type="button" className="secondary" onClick={() => onNavigate?.('Pipeline')}>Open Pipeline</button><button type="button" className="primary" onClick={() => onNavigate?.('Follow-ups')}>Open Follow-ups</button></div>
     </section>
     <section id="v2-queue" className="panel v2-view-panel">
       <div className="between"><div><h2>2. Analyze prospects</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>

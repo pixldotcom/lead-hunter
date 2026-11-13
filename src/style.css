@@ -160,9 +160,9 @@ a,.linkbtn{color:var(--brand-orange)}
 
 /* V2: clear journey navigation and compact, readable mobile workspace. */
 .v2-workflow-nav{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;padding:4px 2px 10px;scrollbar-width:thin}
-.v2-workflow-nav a{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-height:44px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);text-decoration:none;font-size:.72rem;font-weight:650;scroll-snap-align:start}
-.v2-workflow-nav a:hover,.v2-workflow-nav a:focus-visible{border-color:var(--brand-blue);background:var(--brand-blue-tint)}
-.v2-workflow-nav a span{color:var(--brand-orange);font-size:.65rem}
+.v2-workflow-nav button{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-height:44px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);text-decoration:none;font-size:.72rem;font-weight:650;scroll-snap-align:start}
+.v2-workflow-nav button:hover,.v2-workflow-nav button:focus-visible{border-color:var(--brand-blue);background:var(--brand-blue-tint)}
+.v2-workflow-nav button span{color:var(--brand-orange);font-size:.65rem}
 .v2-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .v2-overview>div{display:grid;gap:3px;min-width:0;padding:15px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
 .v2-overview strong{font-size:1.25rem;line-height:1.2;font-variant-numeric:tabular-nums}
@@ -188,7 +188,7 @@ a,.linkbtn{color:var(--brand-orange)}
  .v2-overview{grid-template-columns:repeat(2,minmax(0,1fr))}
  .v2-overview>div{padding:12px}
  .v2-workflow-nav{margin-inline:-12px;padding-inline:12px}
- .v2-workflow-nav a{min-height:44px}
+ .v2-workflow-nav button{min-height:44px}
  .opportunity-workspace{gap:12px}
  .opportunity-workspace>.panel{padding:14px;min-width:0}
  .opportunity-workspace .between{align-items:stretch}
@@ -447,3 +447,17 @@ a,.linkbtn{color:var(--brand-orange)}
 .danger-outline:hover{background:rgba(216,91,85,.12)}
 @media(max-width:767px){.opportunities-page>.pagehead,.prospect-page>.pagehead{padding:0 2px}.followup-section>.empty{padding:12px}.delete-prospect-dialog{padding:20px}.opportunity-workspace .discovery-search-form .headbuttons>*{flex:1 1 auto}}
 @media(prefers-reduced-motion:reduce){.opportunity-card,.pipeline-card,.followup-card{transition:none}}
+
+.v2-workflow-nav button{appearance:none;cursor:pointer;text-align:left}
+.v2-workflow-nav button[aria-pressed="true"]{border-color:var(--brand-blue);background:var(--brand-blue-tint);color:var(--brand-blue)}
+.v2-workflow-nav button small{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:var(--brand-blue-tint);color:var(--text);font-size:.65rem;font-weight:750}
+.workflow-outreach-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.workflow-outreach-summary>div{display:grid;gap:4px;min-width:0;padding:15px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.workflow-outreach-summary strong{font-size:1.2rem;font-variant-numeric:tabular-nums}
+.workflow-outreach-summary span{color:var(--muted);font-size:.72rem}
+.opportunities-page.workflow-focus-discover #v2-import,.opportunities-page.workflow-focus-discover #v2-qualify,.opportunities-page.workflow-focus-discover #v2-queue,.opportunities-page.workflow-focus-discover #v2-followup,.opportunities-page.workflow-focus-discover .more-import-panel{display:none}
+.opportunities-page.workflow-focus-import #v2-discover,.opportunities-page.workflow-focus-import #v2-qualify,.opportunities-page.workflow-focus-import #v2-queue,.opportunities-page.workflow-focus-import #v2-followup{display:none}
+.opportunities-page.workflow-focus-analyze #v2-import,.opportunities-page.workflow-focus-analyze #v2-discover,.opportunities-page.workflow-focus-analyze #v2-qualify,.opportunities-page.workflow-focus-analyze #v2-followup,.opportunities-page.workflow-focus-analyze .more-import-panel{display:none}
+.opportunities-page.workflow-focus-qualify #v2-import,.opportunities-page.workflow-focus-qualify #v2-discover,.opportunities-page.workflow-focus-qualify #v2-queue,.opportunities-page.workflow-focus-qualify #v2-followup,.opportunities-page.workflow-focus-qualify .more-import-panel{display:none}
+.opportunities-page.workflow-focus-outreach #v2-import,.opportunities-page.workflow-focus-outreach #v2-discover,.opportunities-page.workflow-focus-outreach #v2-qualify,.opportunities-page.workflow-focus-outreach #v2-queue,.opportunities-page.workflow-focus-outreach .more-import-panel{display:none}
+@media(max-width:640px){.workflow-outreach-summary{grid-template-columns:1fr}.v2-workflow-nav button{min-height:44px}}

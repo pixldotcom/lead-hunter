@@ -22,6 +22,27 @@ try{
   await browser.input('[name=email]',fixture.users[0].email);await browser.input('[name=password]',fixture.users[0].password);await browser.click('Log in');
   await browser.wait("!!document.querySelector('.quick-import-panel')");
   assert.ok(await browser.evaluate("document.querySelector('.opportunities-page h1')?.textContent==='Business Opportunities'"));
+  assert.equal(await browser.evaluate("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-discover')"),true,'Business Opportunities should open on the discovery stage');
+  assert.equal(await browser.evaluate("getComputedStyle(document.querySelector('#v2-discover')).display!=='none'"),true,'discovery content should be visible in its focused stage');
+  assert.equal(await browser.evaluate("getComputedStyle(document.querySelector('#v2-queue')).display"),'none','other workflow stages should be hidden in discovery focus');
+  await browser.evaluate("document.querySelector('[data-workflow-step=analyze]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-analyze')&&getComputedStyle(document.querySelector('#v2-queue')).display!=='none'");
+  assert.equal(await browser.evaluate("new URLSearchParams(location.search).get('workflow')"),'analyze','selected workflow stage should be shareable in the URL');
+  await browser.evaluate('history.back()');
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-discover')");
+  await browser.evaluate('history.forward()');
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-analyze')");
+  await browser.evaluate("document.querySelector('[data-workflow-step=qualify]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-qualify')&&getComputedStyle(document.querySelector('#v2-qualify')).display!=='none'");
+  await browser.evaluate("document.querySelector('[data-workflow-step=outreach]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-outreach')&&getComputedStyle(document.querySelector('#v2-followup')).display!=='none'");
+  assert.ok(await browser.evaluate("document.querySelector('#v2-followup')?.textContent.includes('Businesses with contact history')"),'outreach stage should show the shared pipeline and contact history summary');
+  await browser.click('Open Follow-ups');
+  await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
+  await browser.click('Business Opportunities');
+  await browser.wait("document.querySelector('.opportunities-page h1')?.textContent==='Business Opportunities'");
+  await browser.evaluate("document.querySelector('[data-workflow-step=import]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-import')&&getComputedStyle(document.querySelector('.quick-import-panel')).display!=='none'");
   await browser.input('.quick-import-panel textarea','Workspace view fixture | Leeds | https://workspace-view-fixture.example');
   await browser.click('Review import');await browser.wait("document.body.textContent.includes('Review 1 business')");await browser.click('Save to workspace');
   await browser.wait("document.querySelector('.opportunity-notice')?.textContent.includes('added')");
@@ -64,5 +85,5 @@ try{
   await browser.send('Page.reload');
   await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
   assert.equal(await browser.evaluate('location.hash'),'#/follow-ups','refresh should preserve the selected workspace route');
-  console.log('PASS: separate Business Opportunities, Pipeline and Follow-ups navigation; cloud import, stage persistence/reload, and mobile layout. Synthetic Supabase fixture only.');
+  console.log('PASS: focused Business Opportunities stages and browser history; shared outreach navigation; cloud import, stage persistence/reload, and mobile layout. Synthetic Supabase fixture only.');
 }finally{if(browser)await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await fixture.close()}
