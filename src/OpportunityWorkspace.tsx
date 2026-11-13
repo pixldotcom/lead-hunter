@@ -27,7 +27,7 @@ const serviceForFinding = (finding: { category: string; title: string; explanati
   return 'website';
 };
 
-export function OpportunityWorkspace() {
+export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'home'|'prospects'|'followups'}) {
   const cloud = useCloud();
   const data = cloud.snapshot.data.discovery;
   const businesses = data.businesses ?? [];
@@ -42,7 +42,7 @@ export function OpportunityWorkspace() {
   const [reviewCount, Reviews] = useState('');
   const [phone, Phone] = useState('');
   const [sourceUrl, Source] = useState('');
-  const [mobileView, MobileView] = useState<'home'|'discover'|'prospects'|'followups'>('home');
+  const [mobileView, MobileView] = useState<'home'|'discover'|'prospects'|'followups'>(initialView);
   const [showImport, ShowImport] = useState(false);
   const [filter, Filter] = useState('all');
   const [qualificationFilter, QualificationFilter] = useState<QualificationTier | 'all'>('all');
