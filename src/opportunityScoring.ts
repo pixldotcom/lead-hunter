@@ -1,13 +1,6 @@
-import type { BusinessRecord, OpportunityEvidence, ServiceOpportunity } from './opportunityModel';
+import type { BusinessRecord, OpportunityEvidence, ServiceOpportunity, OpportunityScoreBreakdown } from './opportunityModel';
 
-export type OpportunityScore = {
-  total: number;
-  websiteNeed: number;
-  reputation: number;
-  serviceEvidence: number;
-  confidence: number;
-  explanation: string[];
-};
+export type OpportunityScore = OpportunityScoreBreakdown;
 
 export function scoreOpportunities(
   business: BusinessRecord,
@@ -26,12 +19,18 @@ export function scoreOpportunities(
     ? Math.round(evidence.filter(item => item.confidence === 'confirmed').length / evidence.length * 100)
     : 0;
   const bestService = Math.max(0, ...opportunities.map(item => item.score));
-  const total = Math.round(websiteNeed * 0.35 + reputation * 0.2 + bestService * 0.3 + confidence * 0.15);
+  const weighted = {
+    websiteNeed: Math.round(websiteNeed * 0.35),
+    reputation: Math.round(reputation * 0.2),
+    bestService: Math.round(bestService * 0.3),
+    confidence: Math.round(confidence * 0.15),
+  };
+  const total = Object.values(weighted).reduce((sum, value) => sum + value, 0);
   const explanation = [
-    `Website need: ${websiteNeed}/100 (${business.websiteStatus}).`,
-    `Reputation: ${reputation}/100 based on available rating and review count.`,
-    `Service evidence: ${serviceEvidence}/100 from ${actionable.length} actionable observations.`,
-    `Evidence confidence: ${confidence}/100.`,
+    `Website need: ${websiteNeed}/100 contributes ${weighted.websiteNeed} points (35%).`,
+    `Reputation: ${reputation}/100 contributes ${weighted.reputation} points (20%).`,
+    `Best service opportunity: ${bestService}/100 contributes ${weighted.bestService} points (30%).`,
+    `Evidence confidence: ${confidence}/100 contributes ${weighted.confidence} points (15%); ${actionable.length} actionable observations inform service evidence.`,
   ];
-  return { total: Math.min(100, total), websiteNeed, reputation, serviceEvidence, confidence, explanation };
+  return { total: Math.min(100, total), websiteNeed, reputation, serviceEvidence, confidence, bestService, weighted, explanation };
 }

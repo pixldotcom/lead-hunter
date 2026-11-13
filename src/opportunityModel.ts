@@ -43,6 +43,17 @@ export type ServiceOpportunity = {
   rationale: string;
 };
 
+export type OpportunityScoreBreakdown = {
+  total: number;
+  websiteNeed: number;
+  reputation: number;
+  serviceEvidence: number;
+  confidence: number;
+  bestService: number;
+  weighted: { websiteNeed: number; reputation: number; bestService: number; confidence: number };
+  explanation: string[];
+};
+
 export type OpportunityAnalysis = {
   businessId: string;
   websiteStatus: WebsiteStatus;

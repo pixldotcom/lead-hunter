@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectOpportunities } from './opportunityDetection';
+import { validateOpportunityAnalysis } from './opportunityPersistence';
 import type { BusinessRecord, OpportunityEvidence } from './opportunityModel';
 
 const base: BusinessRecord = {
@@ -51,6 +52,19 @@ describe('detectOpportunities', () => {
     expect(performance?.priority).toBe('low');
     expect(performance?.evidenceIds).toContain('evidence-1');
   });
+  it('explains each weighted score contribution and validates the breakdown', () => {
+    const result=detectOpportunities({...base,websiteStatus:'healthy'},[]);
+    expect(result.scoreBreakdown).toMatchObject({
+      total: result.totalScore,
+      websiteNeed: 5,
+      reputation: result.reputationScore,
+      confidence: 0,
+      weighted: { websiteNeed: 2, confidence: 0 },
+    });
+    expect(result.scoreBreakdown?.explanation.join(' ')).toContain('Best service opportunity');
+    expect(validateOpportunityAnalysis(result).scoreBreakdown).toEqual(result.scoreBreakdown);
+  });
+
   it('treats an outdated status as a reviewer assessment that still needs evidence', () => {
     const result = detectOpportunities({ ...base, websiteUrl: 'https://example.test', websiteStatus: 'outdated' }, []);
     const website = result.opportunities.find(item => item.service === 'website');
