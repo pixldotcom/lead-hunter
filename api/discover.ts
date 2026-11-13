@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+export const config = { maxDuration: 25 };
 // Keep this serverless entry point self-contained: Vercel does not package Vite's
 // client-side TypeScript modules as Node-resolvable ESM dependencies.
 const categories: Record<string, [string, string]> = {
