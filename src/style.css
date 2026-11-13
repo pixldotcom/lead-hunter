@@ -341,3 +341,19 @@ a,.linkbtn{color:var(--brand-orange)}
 .opportunity-workspace label:has(>textarea[readonly]){min-width:0}
 .opportunity-workspace .headbuttons{flex-wrap:wrap}
 @media(max-width:767px){.opportunity-workspace textarea[readonly]{font-size:.76rem;min-height:170px}.opportunity-workspace .headbuttons>button{max-width:100%;white-space:normal}}
+
+.quick-import-panel{display:grid;gap:14px}
+.quick-import-panel>label{display:grid;gap:7px;font-weight:650;font-size:.78rem}
+.quick-import-panel textarea{min-height:120px;resize:vertical;font:inherit;line-height:1.5}
+.quick-import-preview{display:grid;gap:10px;padding-top:14px;border-top:1px solid var(--line)}
+.quick-import-row{display:grid;gap:7px;min-width:0;padding:13px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.quick-import-row>*{min-width:0;overflow-wrap:anywhere}
+.quick-import-row>span,.website-extract-review>p{color:var(--muted);font-size:.72rem}
+.website-extract-review{display:grid;gap:8px;padding:10px;border-radius:8px;background:var(--bg)}
+.website-extract-review>label{display:grid;gap:5px}
+.experimental-osm,.more-import-options{margin-top:5px;padding:12px;border:1px dashed var(--line);border-radius:9px}
+.experimental-osm>summary,.more-import-options>summary{cursor:pointer;font-size:.75rem;font-weight:650;line-height:1.5}
+.experimental-osm-body{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:9px}
+.experimental-osm-body .formgrid{margin-top:8px}
+.experimental-osm-body .discovery-review-list{max-height:440px;overflow:auto}
+@media(max-width:767px){.quick-import-panel{gap:12px}.quick-import-row{padding:12px}.experimental-osm-body{padding:9px}.experimental-osm-body .headbuttons>*{flex:1 1 140px}}
