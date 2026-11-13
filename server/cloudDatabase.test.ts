@@ -44,7 +44,7 @@ describe('real PostgreSQL migration, transactional saves and RLS',()=>{
  it('Quick Import survives a real PostgreSQL save, fresh load, and pipeline qualification',async()=>asUser(userA,async()=>{
   const before=await load();
   const lines='https://www.google.com/maps/place/Example+Studio | Example Studio | Ludhiana\nExample Studio | Ludhiana | https://example-studio.test';
-  const result=importBusinessRows(parseQuickImport(lines),before.data.discovery.businesses);
+  const result=importBusinessRows(parseQuickImport(lines),before.data.discovery.businesses??[]);
   expect(result.added).toBe(1);
   expect(result.merged).toBe(1);
   const prospect=result.businesses.find(item=>item.name==='Example Studio');
@@ -55,17 +55,18 @@ describe('real PostgreSQL migration, transactional saves and RLS',()=>{
   expect(committed.revision).toBe(before.revision+1);
   // This is a fresh database read, not JSON roundtripping or local component state.
   const reloaded=validateCloud((await load()).data);
-  const stored=reloaded.discovery.businesses.find(item=>item.id===prospect!.id);
+  const loadedBusinesses=reloaded.discovery.businesses??[];
+  const stored=loadedBusinesses.find(item=>item.id===prospect!.id);
   expect(stored).toMatchObject({
     name:'Example Studio',location:'Ludhiana',websiteUrl:'https://example-studio.test/',
     sourceUrl:'https://www.google.com/maps/place/Example+Studio',
     rating:null,reviewCount:null,websiteStatus:'unknown'
   });
-  expect(reloaded.discovery.businesses.filter(item=>item.name==='Example Studio')).toHaveLength(1);
-  const pipeline=buildQualifiedShortlist(reloaded.discovery.businesses,reloaded.discovery.opportunityAnalyses);
+  expect(loadedBusinesses.filter(item=>item.name==='Example Studio')).toHaveLength(1);
+  const pipeline=buildQualifiedShortlist(loadedBusinesses,reloaded.discovery.opportunityAnalyses??[]);
   expect(pipeline.some(item=>item.business.id===stored?.id && item.tier==='analyze')).toBe(true);
   // Re-import after reload must reuse the same business ID.
-  const again=importBusinessRows(parseQuickImport(lines),reloaded.discovery.businesses);
+  const again=importBusinessRows(parseQuickImport(lines),loadedBusinesses);
   expect(again.added).toBe(0);
   expect(again.merged).toBe(2);
   expect(again.businesses.find(item=>item.name==='Example Studio')?.id).toBe(stored?.id);
