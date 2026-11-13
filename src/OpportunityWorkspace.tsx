@@ -76,6 +76,7 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
   const [queueProgress, QueueProgress] = useState<{done:number;total:number;failed:number;current:string}|null>(null);
   const [queueFailures, QueueFailures] = useState<Record<string,string>>({});
   const [websitePreview, WebsitePreview] = useState<Record<string, unknown> | null>(null);
+  const [deleteTarget, DeleteTarget] = useState<BusinessRecord | null>(null);
 
   const file = useRef<HTMLInputElement>(null);
   const cancelBatch = useRef(false);
@@ -86,6 +87,28 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
     const next = { ...cloud.snapshot.data.discovery, businesses: nextBusinesses, opportunityAnalyses: nextAnalyses };
     if (!await cloud.change('discovery', next)) throw new Error('Could not save the opportunity workspace to cloud. Your previous records are unchanged.');
     working.current = { businesses: nextBusinesses, analyses: nextAnalyses };
+  };
+
+  const deleteProspect = async () => {
+    if (!deleteTarget || busy) return;
+    Busy(true); ErrorMessage('');
+    try {
+      const current = cloud.snapshot.data.discovery;
+      const nextBusinesses = working.current.businesses.filter(item => item.id !== deleteTarget.id);
+      const nextAnalyses = working.current.analyses.filter(item => item.businessId !== deleteTarget.id);
+      const nextActivities = (current.outreachActivities ?? []).filter(item => item.businessId !== deleteTarget.id);
+      if (!await cloud.change('discovery', { ...current, businesses: nextBusinesses, opportunityAnalyses: nextAnalyses, outreachActivities: nextActivities })) {
+        throw new Error('The prospect could not be deleted. Your saved records are unchanged.');
+      }
+      working.current = { businesses: nextBusinesses, analyses: nextAnalyses };
+      QueueFailures(current => { const next = { ...current }; delete next[deleteTarget.id]; return next; });
+      DeleteTarget(null);
+      Notice('Prospect, analysis, and follow-up history deleted.');
+    } catch (e) {
+      ErrorMessage(e instanceof Error ? e.message : 'Could not delete this prospect.');
+    } finally {
+      Busy(false);
+    }
   };
 
   const addBusiness = async (row: Parameters<typeof createBusinessRecord>[0]) => {
@@ -454,13 +477,15 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
     </section>
       <section id="v2-discover" className="panel osm-discovery">
       <div className="between"><div><h2>Discover businesses</h2><p>Search public OpenStreetMap data by business type and area. Review candidates and verify websites before importing. Coverage varies by location; a missing website tag does not prove a business has no website.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
-      <div className="formgrid">
-        <label>Business category<input list="v2-discovery-categories" value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. builder, gym, dentist"/><datalist id="v2-discovery-categories">{['builder','construction company','architect','electrician','plumber','interior designer','dentist','restaurant','cafe','hotel','gym','pharmacy','beauty salon','real estate agency','school','supermarket'].map(item=><option key={item} value={item}/>)}</datalist></label>
-        <label>City or administrative area<input value={location} maxLength={120} onChange={e => Location(e.target.value)} placeholder="e.g. Ludhiana"/></label>
-      </div>
-      <div className="headbuttons"><button className="primary" disabled={busy || !category.trim() || !location.trim()} onClick={() => void searchOSM()}>{busy ? 'Working…' : 'Find businesses'}</button>
-        {searchQuery && <a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Cross-check on Google Maps</a>}
-      </div>
+      <form className="discovery-search-form" onSubmit={event => { event.preventDefault(); void searchOSM(); }}>
+        <div className="formgrid">
+          <label>Business category<input list="v2-discovery-categories" value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. builder, gym, dentist"/><datalist id="v2-discovery-categories">{['builder','construction company','architect','electrician','plumber','interior designer','dentist','restaurant','cafe','hotel','gym','pharmacy','beauty salon','real estate agency','school','supermarket'].map(item=><option key={item} value={item}/>)}</datalist></label>
+          <label>City or administrative area<input value={location} maxLength={120} onChange={e => Location(e.target.value)} placeholder="e.g. Ludhiana"/></label>
+        </div>
+        <div className="headbuttons"><button type="submit" className="primary" disabled={busy || !category.trim() || !location.trim()}>{busy ? 'Working…' : 'Find businesses'}</button>
+          {searchQuery && <a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Cross-check on Google Maps</a>}
+        </div>
+      </form>
       {discoveryProgress && <div className="headbuttons"><p role="status" className="opportunity-notice">{discoveryProgress}</p><button className="secondary" onClick={() => {cancelBatch.current = true;}}>Stop after current business</button></div>}
       {osmResults.length > 0 && <>
         <div className="between"><div><h3>2. Review discovery results</h3><p>{osmResults.length} candidates · {selectedOSM.length} selected · {osmResults.filter(row => !row.websiteUrl).length} need website verification</p></div><div className="headbuttons"><button className="secondary" disabled={busy} onClick={() => SelectedOSM(osmResults.map(row => row.sourceUrl))}>Select all</button><button className="secondary" disabled={busy} onClick={() => SelectedOSM(osmResults.filter(row=>!row.websiteUrl).map(row => row.sourceUrl))}>Select unlisted</button><button className="secondary" disabled={busy} onClick={() => SelectedOSM([])}>Clear selection</button></div></div>
@@ -550,11 +575,17 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
           <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">{business.websiteUrl}</a> : 'No website URL recorded'}{business.rating !== null ? ` · ★ ${business.rating}` : ''}{business.reviewCount !== null ? ` · ${business.reviewCount} reviews` : ''}{business.sourceUrl ? <> · <a href={business.sourceUrl} target="_blank" rel="noopener noreferrer">Discovery source</a></> : ''}</p>
           <p>Discovery source: {business.discoverySource || 'Not recorded'}</p>{queueFailures[business.id] && <p className="error" role="alert">Analysis needs retry: {queueFailures[business.id]}</p>}
           {analysis ? <><div className="opportunity-score"><strong>Opportunity score: {analysis.totalScore}/100</strong><span>Reputation: {analysis.reputationScore}/100 · Evidence confidence: {analysis.evidenceConfidence}%</span></div><ul className="opportunity-signals">{top.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority}</b> — {item.rationale}</li>)}</ul><details><summary>Evidence and research brief</summary>{analysis.scoreBreakdown && <section aria-label="Opportunity score breakdown"><h4>How this score was calculated</h4><p className="muted">The total combines website need (35%), reputation (20%), best service opportunity (30%), and evidence confidence (15%).</p><ul className="opportunity-signals">{analysis.scoreBreakdown.explanation.map((line,index)=><li key={index}>{line}</li>)}</ul></section>}<h4>All service areas</h4><ul className="opportunity-signals">{analysis.opportunities.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority} ({item.score}/100)</b> — {item.rationale}</li>)}</ul><p>{analysis.evidence.length ? `${analysis.evidence.length} evidence items collected.` : 'No technical evidence collected. This analysis is based on business information only.'}</p>{analysis.evidence.map(item => <p key={item.id}><b>[{item.confidence}] {item.signal}</b> — {item.description} {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}<textarea readOnly rows={12} value={analysis.researchPrompt}/><button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button><h4>Research findings</h4>{analysis.researchNotes ? <><p>{analysis.researchNotes.summary}</p><p className="muted">Imported {new Date(analysis.researchNotes.importedAt).toLocaleString()}; source claims are unverified.</p><ul>{analysis.researchNotes.facts.map((fact, i) => <li key={i}>{fact.claim} — <a href={fact.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a></li>)}</ul>{analysis.researchNotes.hypotheses.length > 0 && <p>Hypotheses: {analysis.researchNotes.hypotheses.join(' · ')}</p>}{analysis.researchNotes.unknowns.length > 0 && <p>Unknowns: {analysis.researchNotes.unknowns.join(' · ')}</p>}{analysis.researchNotes.nextSteps.length > 0 && <p>Next steps: {analysis.researchNotes.nextSteps.join(' · ')}</p>}</> : <p className="muted">No research findings imported.</p>}<button className="secondary" onClick={() => startAgentResearch(business.id,analysis.researchNotes?'follow_up':'investigate')}>Continue / import AI research</button></details></> : <p className="muted">Not analyzed yet. Website scans use the existing local analyzer; no paid API or AI service is called.</p>}
-          <div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Re-analyze' : 'Analyze opportunity'}</button>{analysis && <button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button>}{analysis && <button className="secondary" onClick={() => startAgentResearch(business.id,analysis.researchNotes?'follow_up':'investigate')}>{analysis.researchNotes?'Continue AI research':'Import AI research'}</button>}</div>{researchBusinessId === business.id && <div><h4>AI research workbench</h4><p className="muted">1. Choose a research task. 2. Copy its complete context into ChatGPT, Claude, Gemini or another AI agent. 3. Paste the JSON findings here and review sources before saving.</p>
+          <div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Re-analyze' : 'Analyze opportunity'}</button>{analysis && <button className="secondary" onClick={() => void copyPrompt(analysis.researchPrompt)}>Copy ChatGPT research prompt</button>}{analysis && <button className="secondary" onClick={() => startAgentResearch(business.id,analysis.researchNotes?'follow_up':'investigate')}>{analysis.researchNotes?'Continue AI research':'Import AI research'}</button>}<button className="danger-outline" disabled={busy} onClick={() => DeleteTarget(business)}>Delete prospect</button></div>{researchBusinessId === business.id && <div><h4>AI research workbench</h4><p className="muted">1. Choose a research task. 2. Copy its complete context into ChatGPT, Claude, Gemini or another AI agent. 3. Paste the JSON findings here and review sources before saving.</p>
         <label>Research task<select value={agentResearchMode} onChange={e=>AgentResearchModeInput(e.target.value as AgentResearchMode)}><option value="investigate">Full business investigation</option><option value="follow_up">Investigate remaining unknowns</option><option value="outreach">Service and outreach research</option></select></label>
         <label>Portable AI prompt<textarea readOnly rows={9} value={buildAgentResearchPrompt(business,analysis,agentResearchMode)}/></label><div className="headbuttons"><button className="secondary" onClick={() => void copyPrompt(buildAgentResearchPrompt(business,analysis,agentResearchMode))}>Copy AI prompt</button><button className="secondary" onClick={() => ResearchJson(researchTemplate)}>Insert JSON template</button></div><label>Paste ChatGPT research JSON<textarea rows={10} value={researchJson} onChange={e => ResearchJson(e.target.value)} placeholder={'{"summary":"...","facts":[{"claim":"...","sourceUrl":"https://..."}],"hypotheses":[],"unknowns":[],"nextSteps":[]}'}/></label>{researchPreview && <div className="opportunity-notice" role="status">{researchPreview.valid ? <><strong>Valid research format</strong><p>{researchPreview.notes.facts.length} sourced claims · {researchPreview.notes.hypotheses.length} hypotheses · {researchPreview.notes.unknowns.length} unknowns · {researchPreview.notes.nextSteps.length} next steps</p><p className="muted">Format validation does not verify that sources or claims are true.</p></> : <p className="error">{researchPreview.message}</p>}</div>}<div className="headbuttons"><button className="primary" disabled={busy || !researchPreview?.valid} onClick={() => void saveResearch(business.id)}>Save validated research</button><button className="secondary" onClick={() => { ResearchBusiness(''); ResearchJson(''); }}>Cancel</button></div></div>}
         </article>;
       })}</div>
     </section>
+    {deleteTarget && <div className="delete-prospect-backdrop"><section className="delete-prospect-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-prospect-title" aria-describedby="delete-prospect-description">
+      <span className="delete-prospect-icon" aria-hidden="true">!</span><h2 id="delete-prospect-title">Delete this prospect?</h2>
+      <p id="delete-prospect-description"><strong>{deleteTarget.name}</strong> and its opportunity analysis, pipeline entry, and follow-up history will be removed from this cloud workspace. This cannot be undone.</p>
+      <div className="headbuttons"><button type="button" className="secondary" disabled={busy} onClick={() => DeleteTarget(null)}>Cancel</button><button type="button" className="danger" disabled={busy} onClick={() => void deleteProspect()}>{busy ? 'Deleting…' : 'Delete prospect'}</button></div>
+    </section></div>}
+
   </div>;
 }
