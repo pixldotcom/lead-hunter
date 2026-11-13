@@ -293,3 +293,19 @@ a,.linkbtn{color:var(--brand-orange)}
  .opportunity-workspace .v2-overview>div{padding:12px}
  .opportunity-workspace .v2-mobile-tabs{z-index:90}
 }
+
+
+/* PixlDot branded startup: three blue squares and one orange dot. */
+.pixldot-loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;min-height:min(68svh,540px);width:100%;padding:32px 20px;text-align:center;color:#f2f2f4}
+.pixldot-loading-mark{width:88px;height:88px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:6px;align-items:center;justify-items:center}
+.pixldot-loading-mark .pixldot-tile{width:100%;height:100%;border-radius:3px;background:#3757f5;animation:pixldot-pulse 1.6s ease-in-out infinite}
+.pixldot-loading-mark .pixldot-tile:nth-child(2){animation-delay:.18s}
+.pixldot-loading-mark .pixldot-tile:nth-child(3){animation-delay:.36s}
+.pixldot-loading-mark .pixldot-dot{width:100%;height:100%;border-radius:50%;background:#e87552;animation:pixldot-pulse 1.6s ease-in-out .54s infinite}
+.pixldot-loading-screen>strong{font-family:'Space Grotesk',sans-serif;letter-spacing:.12em;font-size:1.1rem}
+.pixldot-loading-screen>strong span{color:#e87552}
+.pixldot-loading-screen>p{color:#99979e;font-size:.8rem;margin:0}
+.private-login:has(>.pixldot-loading-screen){display:grid;place-items:center;min-height:100svh}
+.private-login .panel:has(.pixldot-loading-screen){max-width:560px;width:min(100%,560px)}
+@keyframes pixldot-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.84)}}
+@media(prefers-reduced-motion:reduce){.pixldot-loading-mark>*{animation:none!important}}
