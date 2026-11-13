@@ -30,6 +30,24 @@ describe('Quick Import', () => {
     expect(result.businesses[0].websiteUrl).toBe('https://clinic.example/');
     expect(result.businesses[0].sourceUrl).toContain('google.com/maps');
   });
+  it('merges an OSM business and URL-only Quick Import with the same official website', () => {
+    const osm = createBusinessRecord({name:'Lachance Entrepreneur Plombier Inc.',category:'plumber',location:'Sherbrooke',websiteUrl:'https://lachance.qc.ca/',discoverySource:'OpenStreetMap (Photon)',sourceUrl:'https://www.openstreetmap.org/node/123'});
+    const result = importBusinessRows(parseQuickImport('https://lachance.qc.ca/'), [osm]);
+    expect(result).toMatchObject({added:0,merged:1});
+    expect(result.businesses).toHaveLength(1);
+    expect(result.businesses[0]).toMatchObject({id:osm.id,name:'Lachance Entrepreneur Plombier Inc.',category:'plumber',location:'Sherbrooke',sourceUrl:osm.sourceUrl});
+  });
+  it('matches equivalent www, protocol, case and trailing slash URL variants', () => {
+    const osm = createBusinessRecord({name:'Lachance Entrepreneur Plombier Inc.',location:'Sherbrooke',websiteUrl:'https://www.lachance.qc.ca/',discoverySource:'OpenStreetMap'});
+    const result = importBusinessRows(parseQuickImport('http://LACHANCE.qc.ca'), [osm]);
+    expect(result).toMatchObject({added:0,merged:1});
+    expect(result.businesses[0].id).toBe(osm.id);
+  });
+  it('does not merge different website paths on a shared hosting domain', () => {
+    const first = createBusinessRecord({name:'Store A',location:'Leeds',websiteUrl:'https://shared.example/store-a',discoverySource:'OSM'});
+    const result = importBusinessRows(parseQuickImport('https://shared.example/store-b'), [first]);
+    expect(result).toMatchObject({added:1,merged:0});
+  });
   it('persists a prospect through the validated workspace model and reload shape', () => {
     const cloud = emptyCloud();
     cloud.discovery.businesses = importBusinessRows(parseQuickImport('Clinic | Leeds'), []).businesses;
