@@ -43,19 +43,32 @@ function parseOverpassBusinesses(payload: unknown, category: string, location: s
 }
 
 
+type GeocodingFeature = {geometry?:{coordinates?:number[]};properties?:{name?:string;city?:string;country?:string;type?:string}};
+function normalizePlaceName(value: string): string {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+}
+// Only use a Photon result when its place name matches the requested locality.
+// Ambiguous names fall back to the named-area query instead of selecting an arbitrary city.
+export function selectGeocodedCenter(location: string, features: GeocodingFeature[]): {lat:number;lon:number}|null {
+  const requestedLocality=normalizePlaceName(location.split(',')[0] ?? '');
+  if(!requestedLocality)return null;
+  const matches=features.filter(feature=>{
+    const properties=feature.properties;
+    return Boolean(properties && [properties.name,properties.city].some(name=>typeof name==='string'&&normalizePlaceName(name)===requestedLocality));
+  });
+  if(matches.length!==1)return null;
+  const coords=matches[0]?.geometry?.coordinates;
+  if(!coords||coords.length<2||!Number.isFinite(coords[0])||!Number.isFinite(coords[1]))return null;
+  return {lat:coords[1],lon:coords[0]};
+}
 // Resolve a city once per request; bounded radius queries avoid expensive administrative-area scans.
 async function geocodeCity(location: string): Promise<{lat:number;lon:number}|null> {
   try {
     const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(location) + '&limit=5&lang=en';
     const response = await fetch(url,{headers:{accept:'application/json'},signal:AbortSignal.timeout(3500)});
     if (!response.ok) return null;
-    const data = await response.json() as {features?:Array<{geometry?:{coordinates?:number[]};properties?:{name?:string;city?:string;country?:string;type?:string}}>} ;
-    const target = location.trim().toLowerCase();
-    const candidates = data.features ?? [];
-    const match = candidates.find(x => [x.properties?.name,x.properties?.city].some(name => name?.toLowerCase()===target)) ?? candidates[0];
-    const coords=match?.geometry?.coordinates;
-    if (!coords || coords.length<2 || !Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return null;
-    return {lat:coords[1],lon:coords[0]};
+    const data = await response.json() as {features?:GeocodingFeature[]};
+    return selectGeocodedCenter(location,data.features ?? []);
   } catch {return null;}
 }
 const endpoints = [
