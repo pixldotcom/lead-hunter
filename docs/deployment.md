@@ -22,6 +22,16 @@ Remove obsolete `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_SESSION_SECRET`, `AUTH_S
 
 Production endpoints: `/api/auth/login`, `/api/auth/logout`, `/api/auth/session`, `/api/auth/recover`, `/api/auth/recovery`, `/api/auth/password`, `/api/workspace`, `/api/workspace/backup`, `/api/audit`, `/api/health`. There is no signup or automatic-search endpoint. GET session returns only account metadata, not tokens. The analyzer keeps DNS pinning, public-address/redirect checks, 1 MB response limits and cancellation; its application deadline is 35 seconds and configured function duration is 60 seconds. Vercel's static frontend and these functions share an origin; no permissive CORS or production proxy is needed.
 
+## Required V2 opportunity persistence upgrade (existing Supabase project)
+
+**Do not consider Quick Import cloud-persistent until this upgrade is applied.** The original October 2026 SQL RPC functions store legacy leads and candidates, but omit `discovery.businesses`, `discovery.opportunityAnalyses` and `discovery.outreachActivities`. Before this fix, an API save could acknowledge a new revision while dropping those V2 records.
+
+For an existing production project that already has the first two migrations applied, **review** and then apply `supabase/migrations/202611130001_v2_opportunity_persistence.sql` in Supabase SQL Editor or through the approved migration process. This script replaces the two *private* owner-scoped RPC implementations while preserving their public authorization wrappers, keeps existing rows untouched and uses the existing `lh_preferences` JSONB field to persist the three V2 arrays. **Do not rerun the original schema creation migration or create a new project.** Obtain an independent Supabase backup beforehand and approve the database change separately from merging app code.
+
+The updated API refuses to save nonempty V2 prospect data when the deployed database still lacks the V2 persistence fields; the proposed work remains available as a device recovery copy for export/retry. After the migration and app deployment, use a disposable example prospect and confirm: **Quick Import → Save to workspace → reload/sign in → Pipeline shows the same prospect → repeat import does not duplicate it**. Also test that saved analysis and follow-up information survive another reload.
+
+Existing V2 records that were discarded by the old SQL function are **not restored automatically by this migration**. Check any local exports or device recovery copies and re-import where available; do not assume earlier “Saved to cloud” banners mean those records remain in PostgreSQL.
+
 ## Supabase production setup � after approval
 
 1. Create a **new dedicated Supabase project** in your chosen organization and region, with a strong database administrator password stored privately. Do not reuse a project containing other application records.
