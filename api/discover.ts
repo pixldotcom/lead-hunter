@@ -45,7 +45,7 @@ function parseOverpassBusinesses(payload: unknown, category: string, location: s
 
 type GeocodingFeature = {geometry?:{coordinates?:number[]};properties?:{name?:string;city?:string;country?:string;type?:string}};
 function normalizePlaceName(value: string): string {
-  return value.normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 }
 // Only use a Photon result when its place name matches the requested locality.
 // Ambiguous names fall back to the named-area query instead of selecting an arbitrary city.
