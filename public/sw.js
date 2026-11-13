@@ -1,6 +1,6 @@
 const CACHE_PREFIX = 'pixldot-shell-';
-const CACHE_NAME = CACHE_PREFIX + 'v1';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/pwa-icon.svg'];
+const CACHE_NAME = CACHE_PREFIX + 'v2';
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/pwa-icon.svg', '/icon-192.png', '/icon-512.png', '/favicon-64.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -22,10 +22,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
-
-  // Never cache authentication, workspace, analyzer, or other API responses.
   if (url.pathname.startsWith('/api/')) return;
-
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
       try {
@@ -41,8 +38,6 @@ self.addEventListener('fetch', (event) => {
     })());
     return;
   }
-
-  // Cache only versioned/static frontend assets. Never cache arbitrary data requests.
   if (['script', 'style', 'image', 'font'].includes(request.destination)) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
