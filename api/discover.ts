@@ -59,9 +59,49 @@ async function geocodeCity(location: string): Promise<{lat:number;lon:number}|nu
   } catch {return null;}
 }
 const endpoints = [
-  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
 ];
+type Business = ReturnType<typeof parseOverpassBusinesses>[number];
+const cache = new Map<string,{at:number;businesses:Business[];source:string}>();
+function remember(key:string,businesses:Business[],source:string) {
+  if(cache.size>80) cache.delete(cache.keys().next().value!);
+  cache.set(key,{at:Date.now(),businesses,source});
+}
+async function overpassSearch(endpoint:string,query:string,category:string,location:string,timeout:number) {
+  const response=await fetch(endpoint+'?data='+encodeURIComponent(query),{
+    headers:{accept:'application/json'},signal:AbortSignal.timeout(timeout)
+  });
+  if(!response.ok) throw Error('HTTP '+response.status);
+  return parseOverpassBusinesses(await response.json(),category,location);
+}
+// Photon indexes OSM places and is a distinct read path when public Overpass is overloaded.
+// Only retain records with a matching OSM category, not fuzzy keyword matches.
+async function photonSearch(category:string,location:string,timeout:number):Promise<Business[]> {
+  const tag=categories[category.trim().toLowerCase()];
+  if(!tag)return [];
+  const url='https://photon.komoot.io/api/?q='+encodeURIComponent(category+' '+location)+'&limit=100&lang=en';
+  const response=await fetch(url,{headers:{accept:'application/json'},signal:AbortSignal.timeout(timeout)});
+  if(!response.ok)throw Error('Photon HTTP '+response.status);
+  const data=await response.json() as {features?:Array<{geometry?:{coordinates?:number[]};properties?:Record<string,unknown>}>};
+  const rows:Business[]=[];const seen=new Set<string>();
+  for(const feature of data.features??[]) {
+    const p=feature.properties??{};
+    const name=typeof p.name==='string'?p.name.trim():'';
+    const osmId=p.osm_id;const osmType=({N:'node',W:'way',R:'relation'} as Record<string,string>)[String(p.osm_type)]??String(p.osm_type);
+    const key=p.osm_key, value=p.osm_value;
+    if(!name || !['node','way','relation'].includes(String(osmType)) || !Number.isFinite(Number(osmId)))continue;
+    if(key!==tag[0]||value!==tag[1])continue;
+    const sourceUrl='https://www.openstreetmap.org/'+osmType+'/'+osmId;
+    if(seen.has(sourceUrl))continue;seen.add(sourceUrl);
+    const coords=feature.geometry?.coordinates;
+    const city=typeof p.city==='string'?p.city:location;
+    const address=[p.street,p.housenumber,p.district,city].filter(v=>typeof v==='string'&&v.trim()).join(', ');
+    rows.push({name,category,location:address||location,websiteUrl:'',phone:'',rating:null,reviewCount:null,sourceUrl,discoverySource:'OpenStreetMap (Photon)',websiteStatus:'unknown',websiteEvidence:'not_listed',opportunityHint:'Photon does not expose website evidence — verify independently',...(coords&&coords.length>=2?{profiles:['https://www.openstreetmap.org/?mlat='+coords[1]+'&mlon='+coords[0]]}:{})});
+  }
+  return rows;
+}
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const respond = (value: unknown, status = 200) => {
     res.statusCode = status;
@@ -88,26 +128,32 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (error) {
     respond({error:error instanceof Error ? error.message : 'Invalid search request.'},400);return;
   }
-  const center = await geocodeCity(location);
-  if (center) query = buildOverpassQuery(category, location, center);
-  let lastError = 'The public discovery services are unavailable.';
-  // Keep the complete request within the serverless execution window.
-  const deadline = Date.now() + 16000;
-  for (const endpoint of endpoints) {
-    const remaining = deadline - Date.now();
-    if (remaining < 1500) break;
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8', 'user-agent': 'LeadHunterV2/1.0 (OpenStreetMap business discovery)' },
-        body: 'data=' + encodeURIComponent(query),
-        signal: AbortSignal.timeout(Math.min(7000, remaining)),
-      });
-      if (!response.ok) {lastError='OpenStreetMap service responded with HTTP '+response.status+'.';continue;}
-      respond({businesses:parseOverpassBusinesses(await response.json(),category.trim(),location.trim())});return;
-    } catch (error) {
-      lastError = error instanceof Error && error.name === 'TimeoutError' ? 'OpenStreetMap service timed out.' : 'OpenStreetMap service connection failed.';
-    }
+  const cacheKey=category.trim().toLowerCase()+'|'+location.trim().toLowerCase();
+  res.setHeader('X-Discovery-Engine','osm-multi-source-v1');
+  const cached=cache.get(cacheKey);
+  if(cached&&Date.now()-cached.at<10*60*1000){respond({businesses:cached.businesses,source:cached.source,cached:true});return;}
+  const started=Date.now();
+  const center=await geocodeCity(location);
+  if(center) query=buildOverpassQuery(category,location,center);
+  // Race independent sources rather than spending the entire budget sequentially.
+  // The first non-empty verified OSM response wins; an empty result is not success.
+  const attempts:string[]=[];
+  const jobs=[
+    ...endpoints.map(endpoint=>overpassSearch(endpoint,query,category,location,10500)
+      .then(businesses=>({businesses,source:'Overpass '+new URL(endpoint).hostname}))
+      .catch(error=>{attempts.push(new URL(endpoint).hostname+': '+(error instanceof Error?error.message:'failed'));return null;})),
+    photonSearch(category,location,9000)
+      .then(businesses=>({businesses,source:'Photon OSM index'}))
+      .catch(error=>{attempts.push('Photon: '+(error instanceof Error?error.message:'failed'));return null;})
+  ];
+  const pending=new Map(jobs.map((job,index)=>[index,job.then(result=>({index,result}))]));
+  let found:Business[]=[];let foundSource='';
+  while(pending.size){
+    const next=await Promise.race([...pending.values()]);
+    pending.delete(next.index);
+    if(next.result?.businesses.length){found=next.result.businesses;foundSource=next.result.source;break;}
   }
-  respond({error:lastError+' Search stopped after a bounded timeout. Please retry shortly. No records were changed.'},503);
+  console.info('[discovery]',JSON.stringify({category,location,source:foundSource||'none',count:found.length,elapsedMs:Date.now()-started,attempts}));
+  if(found.length){remember(cacheKey,found,foundSource);respond({businesses:found,source:foundSource});return;}
+  respond({error:'No business records returned by the available public OSM sources. Please try a different category or location. Public services may be unavailable.',attempts:attempts.slice(0,4)},503);
 }
