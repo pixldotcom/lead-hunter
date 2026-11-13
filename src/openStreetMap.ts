@@ -39,9 +39,10 @@ export async function searchOpenStreetMap(category: string, location: string, fe
       method: 'POST',
       headers: {'content-type':'application/json'},
       body: JSON.stringify({category:category.trim(),location:location.trim()}),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(23000),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) throw Error('Search took too long and was stopped. Please retry shortly or try a smaller location.');
     throw Error('The discovery service could not be reached. Check your connection and retry.');
   }
   let payload: unknown;
