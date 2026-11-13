@@ -129,6 +129,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     respond({error:error instanceof Error ? error.message : 'Invalid search request.'},400);return;
   }
   const cacheKey=category.trim().toLowerCase()+'|'+location.trim().toLowerCase();
+  res.setHeader('X-Discovery-Engine','osm-multi-source-v1');
   const cached=cache.get(cacheKey);
   if(cached&&Date.now()-cached.at<10*60*1000){respond({businesses:cached.businesses,source:cached.source,cached:true});return;}
   const started=Date.now();
