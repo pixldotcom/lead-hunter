@@ -7,10 +7,11 @@ export function buildOverpassQuery(category: string, location: string): string {
   const term = category.trim().toLowerCase();
   if (!term || !location.trim() || category.length > 80 || location.length > 120) throw Error('Enter a category and location using the stated length limits.');
   const mapping: Record<string, [string, string]> = {
+    builder: ['craft', 'builder'], builders: ['craft', 'builder'], 'building contractor': ['craft', 'builder'], contractor: ['craft', 'builder'], 'construction company': ['office', 'construction_company'], construction: ['office', 'construction_company'], architect: ['office', 'architect'], 'architecture firm': ['office', 'architect'], electrician: ['craft', 'electrician'], plumber: ['craft', 'plumber'], painter: ['craft', 'painter'], carpenter: ['craft', 'carpenter'], 'interior designer': ['office', 'interior_design'],
     dentist: ['amenity', 'dentist'], 'dental clinic': ['amenity', 'dentist'], restaurant: ['amenity', 'restaurant'], cafe: ['amenity', 'cafe'], hotel: ['tourism', 'hotel'], 'hair salon': ['shop', 'hairdresser'], pharmacy: ['amenity', 'pharmacy'], 'beauty salon': ['shop', 'beauty'], gym: ['leisure', 'fitness_centre'], 'veterinary clinic': ['amenity', 'veterinary'], 'car repair': ['shop', 'car_repair'], bakery: ['shop', 'bakery'], optician: ['shop', 'optician'], 'real estate agency': ['office', 'estate_agent'], 'law firm': ['office', 'lawyer'], 'accounting firm': ['office', 'accountant'], 'travel agency': ['shop', 'travel_agency'], 'clothing store': ['shop', 'clothes'], supermarket: ['shop', 'supermarket'], school: ['amenity', 'school'],
   };
   const tag = mapping[term];
-  if (!tag) throw Error('This category is not mapped to an OpenStreetMap business type yet. Try a supported category or use CSV/search-assisted import.');
+  if (!tag) throw Error('Unsupported category. Try builder, construction company, architect, electrician, plumber, dentist, gym, or another suggested category.');
   const area = location.trim().replace(/["\\]/g, ' ').replace(/\s+/g, ' ');
   return `[out:json][timeout:20];\narea["name"="${area}"]["boundary"="administrative"]->.searchArea;\n(nwr["${tag[0]}"="${tag[1]}"](area.searchArea););\nout center tags 101;`;
 }

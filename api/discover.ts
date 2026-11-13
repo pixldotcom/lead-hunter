@@ -3,6 +3,7 @@ export const config = { maxDuration: 25 };
 // Keep this serverless entry point self-contained: Vercel does not package Vite's
 // client-side TypeScript modules as Node-resolvable ESM dependencies.
 const categories: Record<string, [string, string]> = {
+  builder:['craft','builder'], builders:['craft','builder'], 'building contractor':['craft','builder'], contractor:['craft','builder'], 'construction company':['office','construction_company'], construction:['office','construction_company'], architect:['office','architect'], 'architecture firm':['office','architect'], electrician:['craft','electrician'], plumber:['craft','plumber'], painter:['craft','painter'], carpenter:['craft','carpenter'], 'interior designer':['office','interior_design'],
   dentist:['amenity','dentist'], 'dental clinic':['amenity','dentist'], restaurant:['amenity','restaurant'],
   cafe:['amenity','cafe'], hotel:['tourism','hotel'], 'hair salon':['shop','hairdresser'],
   pharmacy:['amenity','pharmacy'], 'beauty salon':['shop','beauty'], gym:['leisure','fitness_centre'],
@@ -34,7 +35,7 @@ function parseOverpassBusinesses(payload: unknown, category: string, location: s
     seen.add(sourceId);
     const street=[tags['addr:street'],tags['addr:housenumber']].filter(Boolean).join(' ');
     const address=[street,tags['addr:suburb'],tags['addr:city']||location,tags['addr:postcode']].filter(Boolean).join(', ');
-    return [{name:tags.name.trim(),websiteEvidence:websiteUrl?'listed':'not_listed',opportunityHint:websiteUrl?'Website listed — review quality and SEO':'No website listed in OpenStreetMap — verify before outreach',category:tags.amenity||tags.shop||tags.office||tags.tourism||category,location:address||location,websiteUrl,phone:tags.phone||tags['contact:phone']||'',rating:null,reviewCount:null,sourceUrl:`https://www.openstreetmap.org/${item.type}/${item.id}`,discoverySource:'OpenStreetMap (Overpass)',...(websiteUrl?{}:{websiteStatus:'unknown'}),...(tags.email||tags['contact:email']?{email:tags.email||tags['contact:email']}:{}),...(lat!==undefined&&lon!==undefined?{profiles:[`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`]}:{})}];
+    return [{name:tags.name.trim(),websiteEvidence:websiteUrl?'listed':'not_listed',opportunityHint:websiteUrl?'Website listed — review quality and SEO':'No website listed in OpenStreetMap — verify before outreach',category:tags.amenity||tags.shop||tags.office||tags.craft||tags.tourism||category,location:address||location,websiteUrl,phone:tags.phone||tags['contact:phone']||'',rating:null,reviewCount:null,sourceUrl:`https://www.openstreetmap.org/${item.type}/${item.id}`,discoverySource:'OpenStreetMap (Overpass)',...(websiteUrl?{}:{websiteStatus:'unknown'}),...(tags.email||tags['contact:email']?{email:tags.email||tags['contact:email']}:{}),...(lat!==undefined&&lon!==undefined?{profiles:[`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`]}:{})}];
   });
   // Prioritize records without a listed website, but never claim that the business has no website.
   // Preserve source order within each evidence group and cap only after prioritization.

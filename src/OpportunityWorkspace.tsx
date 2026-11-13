@@ -429,7 +429,7 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
     <section id="v2-discover" className={`panel v2-view-panel ${mobileView==='discover'?'v2-mobile-active':''}`}>
       <div className="between"><div><h2>1. Discover businesses</h2><p>Find public business listings by category and location, then import selected prospects and optionally analyze them automatically. Ratings are not supplied by OpenStreetMap.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
       <div className="formgrid">
-        <label>Business category<input value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. dentist, gym, hotel"/></label>
+        <label>Business category<input list="v2-discovery-categories" value={category} maxLength={80} onChange={e => Category(e.target.value)} placeholder="e.g. builder, gym, dentist"/><datalist id="v2-discovery-categories">{['builder','construction company','architect','electrician','plumber','interior designer','dentist','restaurant','cafe','hotel','gym','pharmacy','beauty salon','real estate agency','school','supermarket'].map(item=><option key={item} value={item}/>)}</datalist></label>
         <label>City or administrative area<input value={location} maxLength={120} onChange={e => Location(e.target.value)} placeholder="e.g. Ludhiana"/></label>
       </div>
       <div className="headbuttons"><button className="primary" disabled={busy || !category.trim() || !location.trim()} onClick={() => void searchOSM()}>{busy ? 'Working…' : 'Find businesses'}</button>
@@ -459,7 +459,7 @@ export function OpportunityWorkspace({initialView = 'home'}: {initialView?: 'hom
         <label style={{display:'flex',gap:9,alignItems:'center',margin:'12px 0'}}><input type="checkbox" checked={autoAnalyzeOSM} disabled={busy} onChange={e => AutoAnalyzeOSM(e.target.checked)}/> Analyze newly imported businesses automatically (uses existing free website scanner)</label>
         <div className="headbuttons"><button className="primary" disabled={busy || !selectedOSM.length} onClick={() => {cancelBatch.current = false; void importOSM();}}>Import {selectedOSM.length} selected {autoAnalyzeOSM ? 'and analyze' : 'businesses'}</button><button className="secondary" disabled={busy} onClick={() => {OSMResults([]);SelectedOSM([]);}}>Discard results</button>{busy && <button className="secondary" onClick={() => {cancelBatch.current = true;}}>Stop after current business</button>}</div>
       </>}
-      <p className="muted">Supported types include dentist, restaurant, cafe, hotel, hair salon, pharmacy, beauty salon, gym, veterinary clinic, car repair, bakery, optician, real estate agency, law firm, accounting firm, travel agency, clothing store, supermarket and school. OpenStreetMap coverage varies by area.</p>
+      <p className="muted">Supported types include builder, construction company, architect, electrician, plumber, painter, carpenter, interior designer, dentist, restaurant, cafe, hotel, gym, and other common services. OpenStreetMap coverage varies by area.</p>
     </section>
     <div className={`v2-mobile-import-control ${mobileView==='discover'?'v2-import-visible':''}`}><button type="button" className="secondary" onClick={()=>ShowImport(value=>!value)} aria-expanded={showImport}>{showImport?'Hide manual import':'Add a business manually or import CSV'}</button></div>
     <section id="v2-import" className={`panel v2-view-panel ${mobileView==='discover'&&showImport?'v2-mobile-active':''}`}>

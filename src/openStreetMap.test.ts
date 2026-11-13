@@ -6,7 +6,7 @@ describe('OpenStreetMap discovery', () => {
     expect(buildOverpassQuery('dentist', 'Ludhiana')).toContain('"amenity"="dentist"');
     expect(buildOverpassQuery('dentist', 'Ludhiana')).toContain('"name"="Ludhiana"');
     expect(buildOverpassQuery('dentist', 'Ludhiana')).toContain('out center tags 101');
-    expect(() => buildOverpassQuery('anything', 'Ludhiana')).toThrow(/not mapped/);
+    expect(() => buildOverpassQuery('anything', 'Ludhiana')).toThrow(/Unsupported category/);
   });
 
   it('maps only returned OSM tags and keeps reputation unknown', () => {
