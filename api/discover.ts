@@ -17,7 +17,8 @@ function buildOverpassQuery(category: string, location: string, center?: {lat:nu
   if (!tag) throw Error('Unsupported category. Choose a category listed in the discovery form.');
   if (!location.trim() || category.length > 80 || location.length > 120) throw Error('Enter a valid category and location.');
   const area = location.trim().replace(/["\\]/g,' ').replace(/\s+/g,' ');
-  if (center) return `[out:json][timeout:12];(nwr["${tag[0]}"="${tag[1]}"](around:7000,${center.lat},${center.lon}););out center tags 101;`;\n  return `[out:json][timeout:12];\\narea["name"="${area}"]["boundary"="administrative"]->.searchArea;\\n(nwr["${tag[0]}"="${tag[1]}"](area.searchArea););\\nout center tags 101;`;
+  if (center) return `[out:json][timeout:12];(nwr["${tag[0]}"="${tag[1]}"](around:7000,${center.lat},${center.lon}););out center tags 101;`;
+  return `[out:json][timeout:12];\\narea["name"="${area}"]["boundary"="administrative"]->.searchArea;\\n(nwr["${tag[0]}"="${tag[1]}"](area.searchArea););\\nout center tags 101;`;
 }
 type Element = {type:'node'|'way'|'relation';id:number;lat?:number;lon?:number;center?:{lat:number;lon:number};tags?:Record<string,string>};
 function parseOverpassBusinesses(payload: unknown, category: string, location: string) {
