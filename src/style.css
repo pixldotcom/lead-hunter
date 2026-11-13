@@ -334,3 +334,10 @@ a,.linkbtn{color:var(--brand-orange)}
 .discovery-verification-entry>span{font-size:.7rem;color:var(--muted);line-height:1.4}
 .discovery-verification-entry input{width:100%;min-width:0;max-width:480px;min-height:44px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel);color:var(--text);font-size:.8rem}
 @media(max-width:767px){.discovery-verification-entry input{max-width:100%}.discovery-verification-tools{gap:9px}}
+
+
+/* Portable AI research workbench: keep prompts readable on narrow screens. */
+.opportunity-workspace textarea[readonly]{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.5}
+.opportunity-workspace label:has(>textarea[readonly]){min-width:0}
+.opportunity-workspace .headbuttons{flex-wrap:wrap}
+@media(max-width:767px){.opportunity-workspace textarea[readonly]{font-size:.76rem;min-height:170px}.opportunity-workspace .headbuttons>button{max-width:100%;white-space:normal}}
