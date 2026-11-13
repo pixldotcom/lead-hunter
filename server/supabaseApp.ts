@@ -88,6 +88,17 @@ export function createSupabaseHandler(config?:SupabaseConfig,deps:Deps={}){
      if(data.userId!==user.id)return reply(403,{error:'The account changed. Export pending work and log in to its original account.'});
      if(!Number.isSafeInteger(data.expectedRevision)||(data.expectedRevision as number)<0||typeof data.operationId!=='string'||!/^[a-f0-9-]{36}$/i.test(data.operationId)||(data.importHash!==undefined&&(typeof data.importHash!=='string'||!/^[a-f0-9]{64}$/.test(data.importHash))))return reply(400,{error:'Invalid save operation.'});
      let payload;try{payload=validateCloud(data.data)}catch{return reply(400,{error:'Invalid workspace data. Export the pending copy for review.'})}
+     // The original cloud SQL silently discarded V2 opportunities. Never acknowledge
+     // an opportunity save unless the deployed read function exposes all three arrays.
+     const hasV2Records=!!(payload.discovery.businesses?.length||payload.discovery.opportunityAnalyses?.length||payload.discovery.outreachActivities?.length);
+     if(hasV2Records){
+      const capability=await db.rpc('lh_load_workspace');
+      if(capability.error)return reply(503,{code:'CLOUD_PREFLIGHT_FAILED',error:'Could not check cloud persistence. Your prospect was not saved; retry when cloud access is available.'});
+      const discovery=capability.data?.data?.discovery;
+      if(!discovery||!Array.isArray(discovery.businesses)||!Array.isArray(discovery.opportunityAnalyses)||!Array.isArray(discovery.outreachActivities)){
+       return reply(503,{code:'V2_PERSISTENCE_UPGRADE_REQUIRED',error:'The cloud database needs the V2 persistence migration before saving prospects. No save was attempted. Export the pending recovery copy and ask the workspace owner to apply the reviewed migration.'});
+      }
+     }
      response=await db.rpc('lh_save_workspace',{p_expected_revision:data.expectedRevision,p_operation_id:data.operationId,p_payload:payload,p_import_hash:data.importHash??null,p_payload_hash:createHash('sha256').update(JSON.stringify(payload)).digest('hex')});
     }else response=await db.rpc('lh_load_workspace');
     if(response.error){const conflict=response.error.code==='40001';console.warn('[cloud]',JSON.stringify({code:response.error.code,operation:req.method}));return reply(conflict?409:response.error.code==='42501'?403:503,{error:conflict?'Cloud records changed in another browser. Export unsaved work, reload and reapply it.':'Cloud request failed. Pending work can be retried; contact the owner if it continues.'})}
