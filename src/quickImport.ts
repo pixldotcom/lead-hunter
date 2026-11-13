@@ -1,7 +1,14 @@
 import { createBusinessRecord, parseBusinessCsv, sameBusiness, type BusinessImportRow } from './opportunityPersistence.ts';
 import type { BusinessRecord } from './opportunityModel.ts';
 
-const isMapsUrl = (url: URL) => /(^|\.)google\.[a-z.]+$/i.test(url.hostname) && (/\/maps(?:\/|$)/i.test(url.pathname) || /[?&](?:q|query|cid)=/i.test(url.search));
+const isGoogleHost = (hostname: string) => /(^|\.)google\.(?:com|[a-z]{2,3})(?:\.[a-z]{2})?$/i.test(hostname);
+const isMapsUrl = (url: URL) => {
+  const host = url.hostname.toLowerCase();
+  if (host === 'maps.app.goo.gl') return true;
+  if (host === 'goo.gl') return /^\/maps(?:\/|$)/i.test(url.pathname);
+  if (!isGoogleHost(host)) return false;
+  return /\/maps(?:\/|$)/i.test(url.pathname) || (host.startsWith('maps.google.') && /[?&](?:q|query|cid)=/i.test(url.search));
+};
 
 export function normalizeHttpUrl(value: string, label: string): string {
   const input = value.trim();
@@ -31,16 +38,19 @@ export function parseQuickImport(text: string): BusinessImportRow[] {
         if (!name || !location) throw Error(`Row ${index + 1} is a Google Maps reference. Add the business name and location after it, separated by |.`);
         return { name, location, sourceUrl: reference, discoverySource: 'Google Maps reference (user supplied)' };
       }
+      if (isGoogleHost(url.hostname)) throw Error(`Row ${index + 1}: use a Google Maps listing URL, not a Google search or homepage.`);
       const hostname = url.hostname.replace(/^www\./i, '');
       return { name: parts[1] || hostname, location: parts[2] || '', websiteUrl: reference, discoverySource: 'Official website (user supplied)' };
     }
     const [name, location, website = '', maps = ''] = parts;
     if (!name || !location) throw Error(`Row ${index + 1} needs a business name and location.`);
+    const sourceUrl = maps ? normalizeHttpUrl(maps, `Row ${index + 1} Maps reference`) : '';
+    if (sourceUrl && !isMapsUrl(new URL(sourceUrl))) throw Error(`Row ${index + 1} reference must be a Google Maps listing URL.`);
     return {
       name,
       location,
       ...(website ? { websiteUrl: normalizeHttpUrl(website, `Row ${index + 1} website`) } : {}),
-      ...(maps ? { sourceUrl: normalizeHttpUrl(maps, `Row ${index + 1} Maps reference`), discoverySource: 'Google Maps reference (user supplied)' } : { discoverySource: 'Manual quick import' }),
+      ...(sourceUrl ? { sourceUrl, discoverySource: 'Google Maps reference (user supplied)' } : { discoverySource: 'Manual quick import' }),
     };
   }).map(row => { createBusinessRecord(row); return row; });
 }

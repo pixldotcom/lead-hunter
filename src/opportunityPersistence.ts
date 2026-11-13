@@ -1,5 +1,5 @@
 import { parseCsv, uid } from './domain.ts';
-import type { BusinessRecord, OpportunityAnalysis, OpportunityEvidence, ServiceArea, WebsiteStatus, EvidenceConfidence, OpportunityPriority } from './opportunityModel.ts';
+import { PIPELINE_STAGES, type BusinessRecord, type OpportunityAnalysis, type OpportunityEvidence, type ServiceArea, type WebsiteStatus, type EvidenceConfidence, type OpportunityPriority } from './opportunityModel.ts';
 
 const services: ServiceArea[] = ['website', 'seo', 'local_seo', 'performance', 'marketing'];
 const websiteStatuses: WebsiteStatus[] = ['no_website_found', 'outdated', 'needs_improvement', 'healthy', 'unknown'];
@@ -17,6 +17,7 @@ export function validateBusinessRecord(value: unknown): BusinessRecord {
   const b = value as unknown as BusinessRecord;
   if (!['id','name','category','location','websiteUrl','websiteStatus','phone','email','discoverySource','sourceUrl','discoveredAt','updatedAt'].every(key => isText(value[key]))) throw Error('Business record is missing required text fields.');
   if (!b.id.trim() || !b.name.trim() || !websiteStatuses.includes(b.websiteStatus) || !optionalNumber(b.rating, 5) || !optionalNumber(b.reviewCount, 100000000) || (b.rating !== null && b.rating > 5) || (b.reviewCount !== null && !Number.isSafeInteger(b.reviewCount)) || !Array.isArray(b.profiles) || b.profiles.length > 30 || b.profiles.some(p => !isText(p) || p.length > 200) || !validDate(b.discoveredAt) || !validDate(b.updatedAt)) throw Error('Invalid business record fields.');
+  if (b.pipelineStage !== undefined && !PIPELINE_STAGES.includes(b.pipelineStage)) throw Error('Invalid pipeline stage.');
   if (b.websiteUrl && !/^https?:\/\//i.test(b.websiteUrl)) throw Error('Business website must use HTTP or HTTPS.');
   if (b.sourceUrl && !/^https?:\/\//i.test(b.sourceUrl)) throw Error('Business source must use HTTP or HTTPS.');
   if (b.websiteUrl.length > 2048 || b.sourceUrl.length > 2048 || b.name.trim().length > 200 || b.location.length > 200 || b.category.length > 120) throw Error('Business fields exceed their allowed length.');
@@ -123,13 +124,24 @@ export function createBusinessRecord(row: BusinessImportRow, now = new Date()): 
 }
 
 export function sameBusiness(a: BusinessRecord, b: BusinessRecord): boolean {
-  if (normalize(a.name) !== normalize(b.name) || normalize(a.location) !== normalize(b.location)) return false;
+  const siteIdentity = (raw: string) => {
+    if (!raw) return '';
+    try {
+      const url = new URL(raw);
+      return { host: url.hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, ''), path: url.pathname.toLowerCase().replace(/\/+$/, '') || '/' };
+    } catch { return ''; }
+  };
+  const siteA = siteIdentity(a.websiteUrl), siteB = siteIdentity(b.websiteUrl);
+  const sameNameAndLocation = normalize(a.name) === normalize(b.name) && normalize(a.location) === normalize(b.location);
+  const urlOnly = (record: BusinessRecord) => record.discoverySource === 'Official website (user supplied)' && !record.location.trim();
+  const sameHost = !!siteA && !!siteB && siteA.host === siteB.host;
+  const sameSitePath = !!siteA && !!siteB && siteA.host === siteB.host && (siteA.path === siteB.path || siteA.path === '/' || siteB.path === '/');
+  if (siteA && siteB && sameHost && (sameNameAndLocation || (sameSitePath && (urlOnly(a) || urlOnly(b))))) return true;
+  if (!sameNameAndLocation) return false;
   const phoneA = normalizePhone(a.phone), phoneB = normalizePhone(b.phone);
-  const siteA = a.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
-  const siteB = b.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
   if (phoneA && phoneB && phoneA === phoneB) return true;
-  if (siteA && siteB && siteA === siteB) return true;
+  if (siteA && siteB && sameHost && siteA.path === siteB.path) return true;
   if (phoneA && phoneB && phoneA !== phoneB) return false;
-  if (siteA && siteB && siteA !== siteB) return false;
+  if (siteA && siteB && (!sameHost || siteA.path !== siteB.path)) return false;
   return true;
 }
