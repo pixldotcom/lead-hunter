@@ -3,6 +3,8 @@ import {createServer} from 'node:http';
 import {createSupabaseHandler,supabaseConfig} from './supabaseApp';
 import {emptyCloud} from '../src/cloudModel';
 import {makeLead} from '../src/domain';
+import {parseQuickImport,importBusinessRows} from '../src/quickImport';
+import {buildQualifiedShortlist} from '../src/prospectQualification';
 // @ts-expect-error The test fixture is an executable .mjs browser/server helper.
 import {testCloudFixture} from '../scripts/testCloudFixture.mjs';
 let fixture:Awaited<ReturnType<typeof testCloudFixture>>,base:string,server:ReturnType<typeof createServer>;
@@ -24,6 +26,29 @@ describe('Supabase auth adapter and authenticated cloud APIs',()=>{
   expect((await call('workspace',body)).status).toBe(200);expect((await call('workspace',{...body,operationId:crypto.randomUUID()})).status).toBe(409);
   fixture.fail();expect((await call('workspace',{...body,expectedRevision:1,operationId:crypto.randomUUID()})).status).toBe(503);expect((await (await call('workspace')).json()).data.leads.leads[0].name).toBe('Online');
   expect((await call('audit',{url:'http://169.254.169.254'})).status).toBe(400);
+ });
+ it('saves Quick Import through the authenticated API and reloads it in the prospect pipeline',async()=>{
+  const before=await (await call('workspace')).json();
+  const lines='https://www.google.com/maps/place/Example+Builder | Example Builder | Noida\nExample Builder | Noida | https://example-builder.test';
+  const imported=importBusinessRows(parseQuickImport(lines),before.data.discovery.businesses);
+  expect(imported.added).toBe(1);
+  expect(imported.merged).toBe(1);
+  const data={...before.data,discovery:{...before.data.discovery,businesses:imported.businesses}};
+  const saved=await call('workspace',{userId:fixture.users[0].id,expectedRevision:before.revision,operationId:crypto.randomUUID(),data});
+  expect(saved.status).toBe(200);
+  const confirmation=await saved.json();
+  expect(confirmation.revision).toBe(before.revision+1);
+  // Separate GET request: this must be the state returned from database, not React memory.
+  const reloaded=await (await call('workspace')).json();
+  const found=reloaded.data.discovery.businesses.filter((business:{name:string})=>business.name==='Example Builder');
+  expect(found).toHaveLength(1);
+  expect(found[0]).toMatchObject({
+    location:'Noida',websiteUrl:'https://example-builder.test/',
+    sourceUrl:'https://www.google.com/maps/place/Example+Builder',
+    websiteStatus:'unknown',rating:null,reviewCount:null
+  });
+  const pipeline=buildQualifiedShortlist(reloaded.data.discovery.businesses,reloaded.data.discovery.opportunityAnalyses);
+  expect(pipeline.some(prospect=>prospect.business.id===found[0].id&&prospect.tier==='analyze')).toBe(true);
  });
  it('isolates a second account and logs out without enabling unauthorized API reuse',async()=>{
   const first=cookies;expect((await call('auth/login',fixture.users[1])).status).toBe(403);expect((await call('workspace')).status).toBe(401);expect((await call('auth/logout',{})).status).toBe(401);cookies='';expect((await call('workspace')).status).toBe(401);cookies=first;expect((await call('workspace')).status).toBe(200);
