@@ -57,6 +57,7 @@ export function detectOpportunities(business: BusinessRecord, evidence: Opportun
     totalScore,
     reputationScore,
     evidenceConfidence,
+    scoreBreakdown: scored,
     analyzedAt: now.toISOString(),
     researchPrompt: '',
   };

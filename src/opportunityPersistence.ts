@@ -34,6 +34,16 @@ function validateEvidence(value: unknown): OpportunityEvidence {
 export function validateOpportunityAnalysis(value: unknown): OpportunityAnalysis {
   if (!isObject(value) || !isText(value.businessId) || !websiteStatuses.includes(value.websiteStatus as WebsiteStatus) || !Array.isArray(value.opportunities) || !Array.isArray(value.evidence) || typeof value.totalScore !== 'number' || !Number.isFinite(value.totalScore) || value.totalScore < 0 || value.totalScore > 100 || typeof value.reputationScore !== 'number' || !Number.isFinite(value.reputationScore) || value.reputationScore < 0 || value.reputationScore > 100 || typeof value.evidenceConfidence !== 'number' || !Number.isFinite(value.evidenceConfidence) || value.evidenceConfidence < 0 || value.evidenceConfidence > 100 || !validDate(value.analyzedAt) || !isText(value.researchPrompt)) throw Error('Invalid opportunity analysis.');
   const analysis = value as unknown as OpportunityAnalysis;
+  if (analysis.scoreBreakdown !== undefined) {
+    const breakdown=analysis.scoreBreakdown;
+    if (!isObject(breakdown)) throw Error('Invalid opportunity score breakdown.');
+    const scoreKeys=['total','websiteNeed','reputation','serviceEvidence','confidence','bestService'] as const;
+    if (!scoreKeys.every(key => typeof breakdown[key]==='number' && Number.isFinite(breakdown[key]) && breakdown[key]>=0 && breakdown[key]<=100)) throw Error('Invalid opportunity score breakdown.');
+    const weighted=breakdown.weighted;
+    if (!isObject(weighted) || !(['websiteNeed','reputation','bestService','confidence'] as const).every(key => typeof weighted[key]==='number' && Number.isFinite(weighted[key]) && weighted[key]>=0 && weighted[key]<=100)) throw Error('Invalid opportunity score breakdown.');
+    const explanation=breakdown.explanation;
+    if (!Array.isArray(explanation) || explanation.some(item=>!isText(item))) throw Error('Invalid opportunity score breakdown.');
+  }
   if (analysis.researchNotes != null) {
     const notes = analysis.researchNotes;
     if (!isObject(notes) || !isText(notes.summary) || notes.summary.length > 4000 || !Array.isArray(notes.facts) || notes.facts.length > 30 || notes.facts.some(f => !isObject(f) || !isText(f.claim) || f.claim.length > 500 || !isText(f.sourceUrl) || (f.sourceUrl && !/^https?:\/\//i.test(f.sourceUrl))) || !Array.isArray(notes.hypotheses) || notes.hypotheses.length > 30 || notes.hypotheses.some(x => !isText(x) || x.length > 500) || !Array.isArray(notes.unknowns) || notes.unknowns.length > 30 || notes.unknowns.some(x => !isText(x) || x.length > 500) || !Array.isArray(notes.nextSteps) || notes.nextSteps.length > 20 || notes.nextSteps.some(x => !isText(x) || x.length > 500) || !validDate(notes.importedAt)) throw Error('Invalid imported research notes.');

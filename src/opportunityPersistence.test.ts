@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDiscovery, validateDiscovery, type DiscoveryData } from './discovery';
-import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
+import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness, validateOpportunityAnalysis } from './opportunityPersistence';
+import { detectOpportunities } from './opportunityDetection';
 
 describe('opportunity business persistence', () => {
   it('imports structured research while keeping claims source-linked and hypotheses separate', () => {
@@ -36,6 +37,13 @@ describe('opportunity business persistence', () => {
     const migrated = validateDiscovery(legacy);
     expect(migrated.businesses).toEqual([]);
     expect(migrated.opportunityAnalyses).toEqual([]);
+  });
+
+  it('accepts legacy opportunity analyses without score breakdowns', () => {
+    const business=createBusinessRecord({name:'Legacy business'});
+    const analysis=detectOpportunities(business,[]);
+    delete (analysis as {scoreBreakdown?:unknown}).scoreBreakdown;
+    expect(validateOpportunityAnalysis(analysis).scoreBreakdown).toBeUndefined();
   });
 
   it('deduplicates the same business by name and location when one source lacks a phone or website', () => {
