@@ -1,0 +1,48 @@
+// End-to-end smoke for the distinct prospecting pages using synthetic Auth and a disposable PostgreSQL fixture.
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {resolve,extname,sep} from 'node:path';
+import assert from 'node:assert/strict';
+import {testCloudFixture} from '../testCloudFixture.mjs';
+import {launchBrowser} from '../archive/browserHarness.mjs';
+import {createSupabaseHandler} from '../../server/supabaseApp.ts';
+
+const fixture=await testCloudFixture(),root=resolve('dist'),probe=createServer();
+await new Promise(resolve=>probe.listen(0,'127.0.0.1',resolve));
+const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
+const origin=`http://127.0.0.1:${port}`;
+const handler=createSupabaseHandler({origin,url:'https://fixture.supabase.co',key:'sb_publishable_fixture',secure:false,ownerUserId:fixture.users[0].id,ownerEmail:fixture.users[0].email},{client:fixture.client});
+const server=createServer(async(req,res)=>{const path=new URL(req.url??'/',origin).pathname;if(path.startsWith('/api/'))return handler(req,res);const file=resolve(root,'.'+(path==='/'?'/index.html':decodeURIComponent(path)));if(!file.startsWith(root+sep)){res.writeHead(403);res.end();return}try{const data=await readFile(file);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'})[extname(file)]??'application/octet-stream');res.end(data)}catch{res.writeHead(404);res.end()}});
+await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
+let browser;
+try{
+  browser=await launchBrowser();
+  await browser.send('Page.navigate',{url:origin});
+  await browser.wait("!!document.querySelector('[name=email]')");
+  await browser.input('[name=email]',fixture.users[0].email);await browser.input('[name=password]',fixture.users[0].password);await browser.click('Log in');
+  await browser.wait("!!document.querySelector('.quick-import-panel')");
+  assert.ok(await browser.evaluate("document.querySelector('.opportunities-page h1')?.textContent==='Business Opportunities'"));
+  await browser.input('.quick-import-panel textarea','Workspace view fixture | Leeds | https://workspace-view-fixture.example');
+  await browser.click('Review import');await browser.wait("document.body.textContent.includes('Review 1 business')");await browser.click('Save to workspace');
+  await browser.wait("document.querySelector('.opportunity-notice')?.textContent.includes('added')");
+  const imported=await browser.evaluate("fetch('/api/workspace').then(r=>r.json())");
+  const business=imported.data.discovery.businesses.find(item=>item.name==='Workspace view fixture');
+  assert.ok(business,'Quick Import record must be present in the persisted cloud workspace');
+  await browser.click('Pipeline');await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'&&document.body.textContent.includes('Workspace view fixture')");
+  await browser.input('[aria-label="Pipeline stage for Workspace view fixture"]','researching');
+  await browser.wait("fetch('/api/workspace').then(r=>r.json()).then(r=>r.data.discovery.businesses.find(b=>b.id==="+JSON.stringify(business.id)+")?.pipelineStage==='researching')");
+  await browser.send('Page.reload');await browser.wait("document.querySelector('.opportunities-page h1')?.textContent==='Business Opportunities'");await browser.click('Pipeline');await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'&&document.body.textContent.includes('Workspace view fixture')");
+  assert.equal(await browser.evaluate("document.querySelector('[aria-label=\"Pipeline stage for Workspace view fixture\"]')?.value"),'researching','stage should survive reload');
+  await browser.click('Follow-ups');await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
+  await browser.click('Schedule follow-up');
+  const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  await browser.evaluate(`(()=>{const input=[...document.querySelectorAll('.followup-editor input[type=date]')][1];const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,${JSON.stringify(tomorrow)});input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  await browser.input('.followup-editor textarea','Follow-up visibility fixture note');
+  await browser.click('Save follow-up');
+  await browser.wait("fetch('/api/workspace').then(r=>r.json()).then(r=>r.data.discovery.outreachActivities.some(a=>a.businessId==="+JSON.stringify(business.id)+"&&a.note==='Follow-up visibility fixture note'&&a.history.length===1))");
+  await browser.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await browser.click('Follow-ups');await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'&&document.body.textContent.includes('Follow-up visibility fixture note')");
+  assert.ok(await browser.evaluate("[...document.querySelectorAll('.followup-section h2')].some(heading=>heading.textContent.includes('Upcoming'))"),'scheduled activity should appear in Upcoming');
+  assert.ok(await browser.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),'mobile view must not overflow horizontally');
+  console.log('PASS: separate Business Opportunities, Pipeline and Follow-ups navigation; cloud import, stage persistence/reload, and mobile layout. Synthetic Supabase fixture only.');
+}finally{if(browser)await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await fixture.close()}
