@@ -1,11 +1,25 @@
 import { createBusinessRecord, parseBusinessCsv, sameBusiness, type BusinessImportRow } from './opportunityPersistence.ts';
 import type { BusinessRecord } from './opportunityModel.ts';
 
-const isMapsUrl = (url: URL) => /(^|\.)google\.[a-z.]+$/i.test(url.hostname) && (/\/maps(?:\/|$)/i.test(url.pathname) || /[?&](?:q|query|cid)=/i.test(url.search));
+const isBareMapsUrl = (value: string) => /^(?:(?:www\.)?google\.[a-z.]+\/maps(?:\/|$)|maps\.google\.[a-z.]+(?:\/|$)|maps\.app\.goo\.gl\/|goo\.gl\/maps(?:\/|$))/i.test(value.trim());
+
+const isMapsUrl = (url: URL) => {
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === 'maps.app.goo.gl' || (hostname === 'goo.gl' && /^\/maps(?:\/|$)/i.test(url.pathname))) return true;
+  return /(^|\.)google\.[a-z.]+$/i.test(hostname) && (/\/maps(?:\/|$)/i.test(url.pathname) || /[?&](?:q|query|cid)=/i.test(url.search));
+};
+
+const mapsPlaceName = (url: URL) => {
+  const match = url.pathname.match(/\/maps\/place\/([^/]+)/i);
+  if (!match) return '';
+  const raw = match[1].replace(/\+/g, ' ');
+  try { return decodeURIComponent(raw).trim(); } catch { return raw.trim(); }
+};
 
 export function normalizeHttpUrl(value: string, label: string): string {
-  const input = value.trim();
-  if (!input) return '';
+  const rawInput = value.trim();
+  if (!rawInput) return '';
+  const input = isBareMapsUrl(rawInput) ? `https://${rawInput}` : rawInput;
   let url: URL;
   try { url = new URL(input); } catch { throw Error(`${label} must be a complete http:// or https:// URL.`); }
   if (!['http:', 'https:'].includes(url.protocol) || !url.hostname.includes('.') || url.username || url.password || url.port) throw Error(`${label} must be a public http:// or https:// URL without credentials or a custom port.`);
@@ -21,14 +35,14 @@ export function parseQuickImport(text: string): BusinessImportRow[] {
   if (lines.length > 100) throw Error('Quick import is limited to 100 businesses per batch.');
   return lines.map((line, index) => {
     const parts = line.split('|').map(part => part.trim());
-    if (/^https?:\/\//i.test(parts[0])) {
+    if (/^https?:\/\//i.test(parts[0]) || isBareMapsUrl(parts[0])) {
       const reference = normalizeHttpUrl(parts[0], `Row ${index + 1} reference`);
       let url: URL;
       try { url = new URL(reference); } catch { throw Error(`Row ${index + 1} has an invalid URL.`); }
       if (isMapsUrl(url)) {
-        const name = parts[1] || '';
+        const name = parts[1] || mapsPlaceName(url);
         const location = parts[2] || '';
-        if (!name || !location) throw Error(`Row ${index + 1} is a Google Maps reference. Add the business name and location after it, separated by |.`);
+        if (!name) throw Error(`Row ${index + 1} is a Google Maps reference. Add the business name after the link, separated by |.`);
         return { name, location, sourceUrl: reference, discoverySource: 'Google Maps reference (user supplied)' };
       }
       const hostname = url.hostname.replace(/^www\./i, '');
