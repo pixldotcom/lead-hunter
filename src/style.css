@@ -390,6 +390,18 @@ a,.linkbtn{color:var(--brand-orange)}
 .pipeline-detail{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);overflow-wrap:anywhere}
 .pipeline-detail pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.8rem}
 .pipeline-detail>p{font-size:.84rem}
+.website-proposal{display:grid;gap:10px;margin:0 0 14px;padding:12px;border:1px solid color-mix(in srgb,var(--brand-blue) 42%,var(--line));border-radius:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--brand-blue) 8%,var(--panel)),var(--panel) 70%)}
+.proposal-heading,.proposal-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.proposal-heading{justify-content:space-between}.proposal-heading h3{margin:0;font-size:.98rem}
+.prototype-ready{padding:4px 8px;border-radius:99px;background:color-mix(in srgb,#42c98a 18%,var(--panel));color:#8de4b4;font-size:.68rem;font-weight:700}
+.proposal-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.proposal-links>div{display:grid;align-content:start;gap:5px;min-width:0;font-size:.78rem}
+.proposal-url{min-width:0;overflow-wrap:anywhere;word-break:break-word;color:var(--brand-blue,#a8b8ff)}
+.proposal-actions{margin-top:3px}.proposal-copy{justify-self:start}
+.proposal-editor{display:grid;gap:10px;padding-top:10px;border-top:1px solid var(--line)}
+.proposal-editor>label{display:grid;gap:5px;min-width:0;font-size:.76rem;color:var(--muted)}
+.proposal-editor input,.proposal-editor textarea{width:100%;min-width:0;max-width:100%}.proposal-editor input[aria-invalid="true"]{border-color:#ed7777}
+.website-proposal :focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 .pipeline-mobile-list{display:none}
 .text-button{border:0;background:transparent;color:var(--brand-blue,#8ba3ff);font-weight:650;cursor:pointer}
 .followup-section{min-width:0;padding:16px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--panel) 70%,transparent)}
@@ -411,6 +423,7 @@ a,.linkbtn{color:var(--brand-orange)}
  .pipeline-page .pagehead p,.followups-page .pagehead p{font-size:.78rem}
  .pipeline-page .pagehead>.secondary,.followups-page .pagehead>.secondary{min-height:42px;white-space:nowrap}
  .pipeline-card .between,.followup-card .between{align-items:flex-start;gap:8px}
+ .proposal-links{grid-template-columns:minmax(0,1fr)}.proposal-actions>*{min-height:42px}.proposal-editor .proposal-actions>*{flex:1 1 auto}
  .followup-list{grid-template-columns:minmax(0,1fr)}
  .followup-editor .formgrid{grid-template-columns:minmax(0,1fr)}
  .followup-section{padding:12px}

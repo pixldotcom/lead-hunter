@@ -60,3 +60,8 @@ export function pipelineStageForOutreach(stage: OutreachStage): PipelineStage | 
   if (stage === 'closed') return 'lost';
   return undefined;
 }
+
+/** Saving a prototype can promote early-stage prospects, but never rewrites outreach or closed stages. */
+export function pipelineStageForPrototype(stage: PipelineStage, hasPrototype: boolean): PipelineStage | undefined {
+  return hasPrototype && ['new', 'researching', 'qualified'].includes(stage) ? 'ready_to_pitch' : undefined;
+}

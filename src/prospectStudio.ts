@@ -6,6 +6,12 @@ export const emptyClientJourney = (): ClientJourney => ({
   communications: [],
 });
 
+/** Merge prototype edits into an existing journey without replacing prompt or communication history. */
+export function withPrototype(existing: ClientJourney | undefined, prototype: ClientJourney['prototype']): ClientJourney {
+  const journey = existing ?? emptyClientJourney();
+  return { ...journey, prototype };
+}
+
 export function buildWebsiteContextPrompt(business: BusinessRecord, notes = business.contextNotes ?? ''): string {
   return [
     'Act as an expert website strategist, UI/UX designer, conversion specialist, and senior full-stack developer.',
@@ -37,11 +43,12 @@ export function buildOutreachPrompt(business: BusinessRecord): string {
     'Industry: ' + (business.category || 'Not recorded'),
     'Original website: ' + (business.websiteUrl || 'Not recorded'),
     'Proposed redesigned website: ' + (prototype?.url || 'Not saved yet'),
+    'Project reference: ' + (prototype?.projectReference || 'Not recorded'),
     'Improvements: ' + (prototype?.improvements || prototype?.notes || 'Not recorded'),
     'Relevant notes: ' + (business.contextNotes || prototype?.notes || 'None'),
     'Available contact information: ' + ([business.email, business.phone].filter(Boolean).join(' · ') || 'Not recorded'),
     '',
-    'Sound human, confident, respectful, and helpful. Avoid criticizing the existing website. Explain that the redesign is an independently prepared concept, not an approved project. Include the prototype link naturally and suggest a compelling but non-clickbait subject line. Keep the email concise. Also provide a shorter version suitable for a website contact form. Do not invent facts or promise results.'
+    prototype?.url ? 'Sound human, confident, respectful, and helpful. Avoid criticizing the existing website. Explain that the redesign is an independently prepared concept, not an approved project. Include the prototype link naturally and suggest a compelling but non-clickbait subject line. Keep the email concise. Also provide a shorter version suitable for a website contact form. Do not invent facts or promise results.' : 'No redesign prototype is available yet. Do not imply a prototype link exists. Ask whether the business would be open to seeing a redesign concept. Keep the email concise, personalized, respectful, and factual. Do not invent facts or promise results.'
   ].join('\n');
 }
 
