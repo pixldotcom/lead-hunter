@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BusinessRecord, ClientJourney, ProspectCommunication } from './opportunityModel';
-import { buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, emptyClientJourney, isSafeHttpUrl } from './prospectStudio';
+import { buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, emptyClientJourney, isSafeHttpUrl } from './prospectStudioUtils';
 
 type Props = {
   business: BusinessRecord;

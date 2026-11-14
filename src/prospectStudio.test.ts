@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { BusinessRecord } from './opportunityModel';
-import { appendCommunication, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, isSafeHttpUrl, withPrototype } from './prospectStudio';
+import { appendCommunication, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, isSafeHttpUrl, withPrototype } from './prospectStudioUtils';
 import { validateBusinessRecord } from './opportunityPersistence';
 import { mergeImportedBusiness } from './quickImport';
-import { communicationStage } from './prospectStudio';
+import { communicationStage } from './prospectStudioUtils';
 import { pipelineStageForOutreach } from './pipeline';
 
 const business: BusinessRecord = {
