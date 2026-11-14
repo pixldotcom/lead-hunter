@@ -25,13 +25,13 @@ export function validateBusinessRecord(value: unknown): BusinessRecord {
     const communicationKinds = ['sent','reply','meeting','interested','won','lost','note'];
     const communicationChannels = ['email','phone','contact_form','meeting','other'];
     if (!isObject(j) || !isObject(j.prototype) || !validHttp(j.prototype.url) ||
-      !['platform','completedAt','notes','improvements'].every(key => isText(j.prototype[key])) ||
+      !(['platform','completedAt','notes','improvements'] as const).every(key => isText(j.prototype[key])) ||
       j.prototype.platform.length > 120 || j.prototype.completedAt.length > 80 || j.prototype.notes.length > 3000 || j.prototype.improvements.length > 5000 ||
       !Array.isArray(j.promptSnapshots) || j.promptSnapshots.length > 30 ||
       j.promptSnapshots.some(p => !isObject(p) || !['website_rebuild','outreach','follow_up'].includes(String(p.kind)) || !isText(p.text) || p.text.length > 30000 || !validDate(p.generatedAt)) ||
       !Array.isArray(j.communications) || j.communications.length > 500 ||
       j.communications.some(c => !isObject(c) || !isText(c.id) || !c.id || !communicationKinds.includes(String(c.kind)) || !communicationChannels.includes(String(c.channel)) ||
-        !['subject','message','contact','occurredAt','prototypeUrl','followUpAt','notes'].every(key => isText(c[key])) ||
+        !(['subject','message','contact','occurredAt','prototypeUrl','followUpAt','notes'] as const).every(key => isText(c[key])) ||
         c.subject.length > 500 || c.message.length > 20000 || c.contact.length > 300 || !validDate(c.occurredAt) || !validHttp(c.prototypeUrl) || !validDate(c.followUpAt) || c.notes.length > 3000)
       ) throw Error('Invalid saved client journey details.');
   }
