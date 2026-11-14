@@ -49,6 +49,16 @@ try{
   const imported=await browser.evaluate("fetch('/api/workspace').then(r=>r.json())");
   const business=imported.data.discovery.businesses.find(item=>item.name==='Workspace view fixture');
   assert.ok(business,'Quick Import record must be present in the persisted cloud workspace');
+  await browser.evaluate("document.querySelector('[data-workflow-step=qualify]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-qualify')");
+  await browser.evaluate("[...document.querySelectorAll('#v2-qualify button')].find(button=>button.textContent.trim()==='Prepare outreach')?.click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-outreach')&&document.querySelector('[data-outreach-business]')?.getAttribute('data-outreach-business')==="+JSON.stringify(business.id));
+  assert.equal(await browser.evaluate("new URLSearchParams(location.search).get('workflow')"),'outreach','preparing outreach should select and persist the Outreach stage');
+  assert.ok(await browser.evaluate("document.querySelector('.workflow-outreach-studio')?.textContent.includes('Human-reviewed outreach studio')"),'qualified prospect should open its draft in the Outreach stage');
+  assert.ok(await browser.evaluate("document.querySelector('.workflow-outreach-studio')?.textContent.includes('Draft only. Nothing is sent or scheduled.')"),'outreach preparation must never send automatically');
+  const afterOutreachOpen=await browser.evaluate("fetch('/api/workspace').then(r=>r.json())");
+  assert.equal(afterOutreachOpen.data.discovery.businesses.find(item=>item.name==='Workspace view fixture')?.id,business.id,'preparing outreach must retain the existing business ID');
+  await browser.click('Close');
   await browser.click('Pipeline');await browser.wait("document.querySelector('.pipeline-page h1')?.textContent==='Pipeline'&&document.body.textContent.includes('Workspace view fixture')");
   await browser.input('[aria-label="Pipeline stage for Workspace view fixture"]','researching');
   await browser.wait("fetch('/api/workspace').then(r=>r.json()).then(r=>r.data.discovery.businesses.find(b=>b.id==="+JSON.stringify(business.id)+")?.pipelineStage==='researching')");

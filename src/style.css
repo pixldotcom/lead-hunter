@@ -461,3 +461,12 @@ a,.linkbtn{color:var(--brand-orange)}
 .opportunities-page.workflow-focus-qualify #v2-import,.opportunities-page.workflow-focus-qualify #v2-discover,.opportunities-page.workflow-focus-qualify #v2-queue,.opportunities-page.workflow-focus-qualify #v2-followup,.opportunities-page.workflow-focus-qualify .more-import-panel{display:none}
 .opportunities-page.workflow-focus-outreach #v2-import,.opportunities-page.workflow-focus-outreach #v2-discover,.opportunities-page.workflow-focus-outreach #v2-qualify,.opportunities-page.workflow-focus-outreach #v2-queue,.opportunities-page.workflow-focus-outreach .more-import-panel{display:none}
 @media(max-width:640px){.workflow-outreach-summary{grid-template-columns:1fr}.v2-workflow-nav button{min-height:44px}}
+
+.workflow-outreach-prospect-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+.workflow-outreach-prospect-card{display:grid;align-content:start;gap:8px;min-width:0;padding:15px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.workflow-outreach-prospect-card p{margin:0;color:var(--muted);font-size:.82rem}
+.workflow-outreach-studio{margin-top:18px;padding:16px;border:1px solid var(--brand-blue);border-radius:12px;background:var(--panel)}
+.workflow-outreach-studio>.between{align-items:start;margin-bottom:12px}
+.workflow-outreach-studio h3{margin:0 0 4px}
+.workflow-outreach-studio p{overflow-wrap:anywhere}
+@media(max-width:700px){.workflow-outreach-prospect-list{grid-template-columns:1fr}.workflow-outreach-studio{padding:12px}}
