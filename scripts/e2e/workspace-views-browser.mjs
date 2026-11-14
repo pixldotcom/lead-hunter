@@ -21,6 +21,11 @@ try{
   await browser.wait("!!document.querySelector('[name=email]')");
   await browser.input('[name=email]',fixture.users[0].email);await browser.input('[name=password]',fixture.users[0].password);await browser.click('Log in');
   await browser.wait("!!document.querySelector('.quick-import-panel')");
+  assert.ok(await browser.evaluate("document.querySelector('#cloud-settings-tools')"),'cloud and migration utilities should have a Settings destination');
+  assert.equal(await browser.evaluate("document.querySelector('.cloud-status')"),null,'cloud status should not occupy the landing workflow');
+  await browser.click('Settings');await browser.wait("document.querySelector('#cloud-settings-tools .cloud-status')?.textContent.includes('Cloud records loaded')");
+  assert.ok(await browser.evaluate("document.querySelector('#cloud-settings-tools .cloud-utilities')&&document.querySelector('#cloud-settings-tools .migration-panel')"),'cloud tools and migration should be available in Settings');
+  await browser.click('Business Opportunities');await browser.wait("document.querySelector('.quick-import-panel')");
   assert.ok(await browser.evaluate("document.querySelector('.opportunities-page h1')?.textContent==='Business Opportunities'"));
   assert.equal(await browser.evaluate("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-discover')"),true,'Business Opportunities should open on the discovery stage');
   assert.equal(await browser.evaluate("getComputedStyle(document.querySelector('#v2-discover')).display!=='none'"),true,'discovery content should be visible in its focused stage');
