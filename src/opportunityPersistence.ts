@@ -18,15 +18,16 @@ export function validateBusinessRecord(value: unknown): BusinessRecord {
   if (!['id','name','category','location','websiteUrl','websiteStatus','phone','email','discoverySource','sourceUrl','discoveredAt','updatedAt'].every(key => isText(value[key]))) throw Error('Business record is missing required text fields.');
   if (!b.id.trim() || !b.name.trim() || !websiteStatuses.includes(b.websiteStatus) || !optionalNumber(b.rating, 5) || !optionalNumber(b.reviewCount, 100000000) || (b.rating !== null && b.rating > 5) || (b.reviewCount !== null && !Number.isSafeInteger(b.reviewCount)) || !Array.isArray(b.profiles) || b.profiles.length > 30 || b.profiles.some(p => !isText(p) || p.length > 200) || !validDate(b.discoveredAt) || !validDate(b.updatedAt)) throw Error('Invalid business record fields.');
   if (b.pipelineStage !== undefined && !PIPELINE_STAGES.includes(b.pipelineStage)) throw Error('Invalid pipeline stage.');
+  if (b.contextNotes !== undefined && (!isText(b.contextNotes) || b.contextNotes.length > 5000)) throw Error('Business context notes must be 5,000 characters or fewer.');
 
   if (b.clientJourney !== undefined) {
     const j = b.clientJourney;
-    const validHttp = (url: unknown) => isText(url) && (!url || /^https?:\/\//i.test(url)) && url.length <= 2048;
+    const validHttp = (url: unknown) => { if (!isText(url) || url.length > 2048) return false; if (!url) return true; try { const parsed = new URL(url); return ['http:','https:'].includes(parsed.protocol) && !!parsed.hostname && !parsed.username && !parsed.password && !/\s/.test(url); } catch { return false; } };
     const communicationKinds = ['sent','reply','meeting','interested','won','lost','note'];
     const communicationChannels = ['email','phone','contact_form','meeting','other'];
     if (!isObject(j) || !isObject(j.prototype) || !validHttp(j.prototype.url) ||
       !(['platform','completedAt','notes','improvements'] as const).every(key => isText(j.prototype[key])) ||
-      j.prototype.platform.length > 120 || j.prototype.completedAt.length > 80 || j.prototype.notes.length > 3000 || j.prototype.improvements.length > 5000 ||
+      j.prototype.platform.length > 120 || j.prototype.completedAt.length > 80 || !validDate(j.prototype.completedAt) || j.prototype.notes.length > 3000 || j.prototype.improvements.length > 5000 || (j.prototype.projectReference !== undefined && (!isText(j.prototype.projectReference) || j.prototype.projectReference.length > 200)) || (j.prototype.updatedAt !== undefined && (!isText(j.prototype.updatedAt) || !validDate(j.prototype.updatedAt))) ||
       !Array.isArray(j.promptSnapshots) || j.promptSnapshots.length > 30 ||
       j.promptSnapshots.some(p => !isObject(p) || !['website_rebuild','outreach','follow_up'].includes(String(p.kind)) || !isText(p.text) || p.text.length > 30000 || !validDate(p.generatedAt)) ||
       !Array.isArray(j.communications) || j.communications.length > 500 ||

@@ -1,5 +1,6 @@
 import {buildAgentResearchPrompt,type AgentResearchMode} from './agentResearch';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ProspectStudio } from './ProspectStudio';
 import { useCloud } from './CloudWorkspace';
 import { uid } from './domain';
 import { requestAudit } from './analyzerApi';
@@ -7,13 +8,14 @@ import { readEvidence } from './discovery';
 import { detectOpportunities, prioritizedOpportunities } from './opportunityDetection';
 import { appendResearchRevision, createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness } from './opportunityPersistence';
 import { importBusinessRows, parseQuickImport } from './quickImport';
-import type { BusinessRecord, OpportunityEvidence, ServiceArea, WebsiteStatus } from './opportunityModel';
+import type { BusinessRecord, ClientJourney, OpportunityEvidence, ProspectCommunication, ServiceArea, WebsiteStatus } from './opportunityModel';
 import { searchOpenStreetMap, type OSMBusiness } from './openStreetMap';
 import { buildQualifiedShortlist, buildProspectBrief, type QualificationTier } from './prospectQualification';
 import { prepareOutreach, type OutreachChannel } from './outreachPreparation';
 import { OUTREACH_STAGES, followUpStatus, upsertOutreachActivity, type OutreachActivity, type OutreachStage } from './outreachTracking';
 import { FollowupsPage, PipelinePage, WorkspaceMobileTabs } from './ProspectPages';
-import { pipelineStageForOutreach } from './pipeline';
+import { businessPipelineStage, pipelineStageForOutreach } from './pipeline';
+import { appendCommunication, buildWebsiteContextPrompt, communicationStage } from './prospectStudio';
 
 const statusLabels: Record<WebsiteStatus, string> = {
   no_website_found: 'No website found',
@@ -71,6 +73,7 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
   const [quickImportError, QuickImportError] = useState('');
   const [websiteReadError, WebsiteReadError] = useState<{ rowIndex: number; message: string } | null>(null);
   const [filter, Filter] = useState('all');
+  const [journeyBusinessId, JourneyBusinessId] = useState('');
   const [qualificationFilter, QualificationFilter] = useState<QualificationTier | 'all'>('all');
   const [outreachBusinessId, OutreachBusiness] = useState('');
   const [outreachChannel, OutreachChannelInput] = useState<OutreachChannel>('email');
@@ -108,6 +111,50 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
     const next = { ...cloud.snapshot.data.discovery, businesses: nextBusinesses, opportunityAnalyses: nextAnalyses };
     if (!await cloud.change('discovery', next)) throw new Error('Could not save the opportunity workspace to cloud. Your previous records are unchanged.');
     working.current = { businesses: nextBusinesses, analyses: nextAnalyses };
+  };
+
+  const saveClientJourney = async (businessId: string, journey: ClientJourney, event?: ProspectCommunication, contextNotes = '') => {
+    if (contextNotes.length > 5000) throw new Error('Business context notes must be 5,000 characters or fewer.');
+    const current = cloud.snapshot.data.discovery;
+    const currentBusinesses = current.businesses ?? [];
+    const existing = currentBusinesses.find(item => item.id === businessId);
+    if (!existing) throw new Error('This prospect is no longer in the workspace.');
+    const oldJourney = existing.clientJourney ?? journey;
+    const alreadySaved = !!event && oldJourney.communications.some(item => item.id === event.id);
+    const communications = event ? appendCommunication(oldJourney.communications, event) : oldJourney.communications;
+    const activityStage = event ? communicationStage(event.kind) : undefined;
+    const activities = current.outreachActivities ?? [];
+    const previous = activities.find(item => item.businessId === businessId);
+    const pipelineBefore = businessPipelineStage(existing, (current.opportunityAnalyses ?? []).find(item => item.businessId === businessId), previous);
+    const hasPrototype = !!journey.prototype.url;
+    const nextStage = activityStage ? pipelineStageForOutreach(activityStage) :
+      hasPrototype && ['new','researching','qualified'].includes(pipelineBefore) ? 'ready_to_pitch' : undefined;
+    const nextBusiness: BusinessRecord = {
+      ...existing,
+      contextNotes,
+      clientJourney: { ...journey, communications },
+      ...(nextStage ? { pipelineStage: nextStage } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    const nextBusinesses = currentBusinesses.map(item => item.id === businessId ? nextBusiness : item);
+    let nextActivities = activities;
+    if (event && !alreadySaved) {
+      const storedStage = activityStage ?? previous?.stage ?? 'drafted';
+      const storedChannel = event.channel === 'phone' ? 'phone' : event.channel === 'contact_form' ? 'contact_form' : 'email';
+      const actualContact = ['sent','reply','meeting'].includes(event.kind);
+      const updatedActivity: OutreachActivity = {
+        businessId, stage: storedStage, channel: storedChannel,
+        lastContactAt: actualContact ? event.occurredAt : previous?.lastContactAt ?? '',
+        nextFollowUpAt: event.followUpAt || previous?.nextFollowUpAt || '',
+        note: event.notes || previous?.note || '',
+        updatedAt: new Date().toISOString(), history: previous?.history,
+      };
+      nextActivities = upsertOutreachActivity(activities, updatedActivity);
+    }
+    if (!await cloud.change('discovery', { ...current, businesses: nextBusinesses, outreachActivities: nextActivities })) {
+      throw new Error('This update could not be saved to your cloud workspace. Your previous records remain unchanged.');
+    }
+    working.current = { businesses: nextBusinesses, analyses: working.current.analyses };
   };
 
   const deleteProspect = async () => {
@@ -350,8 +397,8 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
   };
 
   const copyPrompt = async (prompt: string) => {
-    try { await navigator.clipboard.writeText(prompt); Notice('Research prompt copied. Paste it into ChatGPT when you are ready to research this business.'); }
-    catch { ErrorMessage('Clipboard access was blocked. Open the analysis and copy the research prompt manually.'); }
+    try { await navigator.clipboard.writeText(prompt); Notice('Context copied. Paste it into ChatGPT when you are ready.'); }
+    catch { const field=document.createElement('textarea');field.value=prompt;field.style.position='fixed';field.style.opacity='0';document.body.append(field);field.select();const copied=document.execCommand('copy');field.remove();if(copied)Notice('Context copied. Paste it into ChatGPT when you are ready.');else ErrorMessage('Clipboard access was blocked. Select and copy the text manually.'); }
   };
 
   const researchPreview = (() => {
@@ -473,20 +520,20 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
   if (activeView === 'pipeline') return <PipelinePage onNavigate={onNavigate}/>;
   if (activeView === 'followups') return <FollowupsPage onNavigate={onNavigate}/>;
   return <div className={`opportunity-workspace opportunities-page workflow-focus-${workflowStep}`}>
-    <div className="pagehead"><div><i>BUSINESS WORKSPACE</i><h1>Business Opportunities</h1><p>Find businesses, audit their public websites, review sourced research, and move qualified opportunities into outreach.</p></div></div>
+    <div className="pagehead"><div><i>BUSINESS WORKSPACE</i><h1>Business Opportunities</h1><p>Find businesses, prepare website context, save redesign prototypes, and remember every client conversation.</p></div></div>
     <nav className="v2-workflow-nav" aria-label="Business workflow stages">
       <button type="button" data-workflow-step="discover" aria-pressed={workflowStep === 'discover'} onClick={() => selectWorkflowStep('discover')}><span>01</span> Discover <small>{businesses.length}</small></button>
       <button type="button" data-workflow-step="import" aria-pressed={workflowStep === 'import'} onClick={() => selectWorkflowStep('import')}><span>02</span> Import</button>
-      <button type="button" data-workflow-step="analyze" aria-pressed={workflowStep === 'analyze'} onClick={() => selectWorkflowStep('analyze')}><span>03</span> Website audit <small>{businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length}</small></button>
-      <button type="button" data-workflow-step="qualify" aria-pressed={workflowStep === 'qualify'} onClick={() => selectWorkflowStep('qualify')}><span>04</span> Research & qualify</button>
-      <button type="button" data-workflow-step="outreach" aria-pressed={workflowStep === 'outreach'} onClick={() => selectWorkflowStep('outreach')}><span>05</span> Outreach <small>{dueActivities.length}</small></button>
+      <button type="button" data-workflow-step="analyze" aria-pressed={workflowStep === 'analyze'} onClick={() => selectWorkflowStep('analyze')}><span>03</span> Prepare website context <small>{businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length}</small></button>
+      <button type="button" data-workflow-step="qualify" aria-pressed={workflowStep === 'qualify'} onClick={() => selectWorkflowStep('qualify')}><span>04</span> Prototype</button>
+      <button type="button" data-workflow-step="outreach" aria-pressed={workflowStep === 'outreach'} onClick={() => selectWorkflowStep('outreach')}><span>05</span> Pipeline / Follow-ups <small>{dueActivities.length}</small></button>
       <button type="button" data-workflow-step="all" aria-pressed={workflowStep === 'all'} onClick={() => selectWorkflowStep('all')}>All stages</button>
     </nav>
     <WorkspaceMobileTabs active="opportunities" onNavigate={onNavigate} dueCount={dueActivities.length}/>
     <div className="v2-overview" aria-label="Workspace overview">
       <div><strong>{businesses.length}</strong><span>Businesses</span></div>
-      <div><strong>{analyses.length}</strong><span>Website reviews</span></div>
-      <div><strong>{qualificationCounts.ready}</strong><span>Ready for review</span></div>
+      <div><strong>{businesses.filter(b => Boolean(b.clientJourney?.prototype.url)).length}</strong><span>Prototypes saved</span></div>
+      <div><strong>{businesses.filter(b => (b.clientJourney?.communications.length ?? 0) > 0).length}</strong><span>Prospects contacted</span></div>
       <div><strong>{dueActivities.length}</strong><span>Follow-ups due</span></div>
     </div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status" className="opportunity-notice">{notice}</p>}
@@ -546,7 +593,7 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
         <div className="headbuttons"><button className="primary" type="submit">Save business</button><button className="secondary" type="button" onClick={() => navigator.clipboard.writeText(csvTemplate).then(() => Notice('CSV template copied.')).catch(() => ErrorMessage('Could not copy CSV template.'))}>Copy CSV template</button>{searchQuery && <><a className="secondary" href={`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`} target="_blank" rel="noopener noreferrer">Search Google Maps</a><a className="secondary" href={`https://www.google.com/search?q=${encodeURIComponent(searchQuery + ' business')}`} target="_blank" rel="noopener noreferrer">Search Google</a></>}</div>
       </form>
       <p className="muted">CSV columns: name, category, location, website, rating, reviewCount, phone, email, websiteStatus, sourceUrl, discoverySource. Leave website blank when no official website was found. That status should be used only after checking the available sources.</p></details>
-    <div className="workflow-next-step"><span>Found a business? Review and save it before the website audit.</span><button type="button" className="secondary" onClick={() => selectWorkflowStep('import')}>Continue to Import</button></div>
+    <div className="workflow-next-step"><span>Found a business? Save it, then prepare context for ChatGPT. A website audit is optional.</span><button type="button" className="secondary" onClick={() => selectWorkflowStep('import')}>Continue to Import</button></div>
     </section>
     <section id="v2-import" className="panel quick-import-panel v2-view-panel">
       <div className="between"><div><h2>2. Quick Import</h2><p>Start with a business website or a Google Maps listing reference. Maps listings are stored as references; business information is never fetched from Maps.</p></div><span className="muted">{businesses.length} saved · {analyses.length} analyzed</span></div>
@@ -556,11 +603,11 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
       {quickImportError&&<p className="error" role="alert">{quickImportError}</p>}
       <input ref={file} hidden type="file" accept=".csv,text/csv" onChange={e => { void importFile(e.target.files?.[0]); e.currentTarget.value = ''; }}/>
       {quickImportPreview && <div className="quick-import-preview"><h3>Review {quickImportPreview.length} business{quickImportPreview.length===1?'':'es'}</h3><p className="muted">Existing businesses are matched by official website first, then name and location. Review each match before saving.</p>{quickImportPreview.map((row,index)=><article key={`${row.name}-${index}`} className="quick-import-row"><strong>{row.name}</strong>{(()=>{const candidate=createBusinessRecord(row);const existing=businesses.find(item=>sameBusiness(item,candidate));return existing?<p className="opportunity-notice" role="status">Already saved as <strong>{existing.name}</strong> — will merge into the existing prospect (no new record).</p>:<p className="muted">New prospect</p>})()}{row.discoverySource==='Google Maps reference (user supplied)'&&!row.location?<label>City or area (recommended)<input value={row.location} onChange={e=>QuickImportPreview(current=>current?.map((candidate,rowIndex)=>rowIndex===index?{...candidate,location:e.target.value}:candidate)??null)} placeholder="City or area"/></label>:<span>{row.location || 'Location not provided — add it to support duplicate matching'}</span>}{row.websiteUrl&&<a href={row.websiteUrl} target="_blank" rel="noopener noreferrer">{row.websiteUrl}</a>}{row.sourceUrl&&<a href={row.sourceUrl} target="_blank" rel="noopener noreferrer">Listing reference</a>}{row.discoverySource==='Official website (user supplied)'&&<button className="secondary" disabled={busy} onClick={()=>void extractWebsite(index,row.websiteUrl||'')}>Read public website details</button>}{websiteReadError?.rowIndex===index&&<p className="error" role="alert">{websiteReadError.message}</p>}{websitePreview?.rowIndex===index&&<div className="website-extract-review"><p>Public website HTML observed:</p><label>Business name suggestion<input value={String((websitePreview.data as {confirmedName?:string}).confirmedName ?? (websitePreview.data as {name?:string}).name ?? '')} onChange={e=>WebsitePreview({...websitePreview,data:{...(websitePreview.data as object),confirmedName:e.target.value}})}/></label><label>Page description<textarea rows={2} readOnly value={String((websitePreview.data as {description?:string}).description||'Not found')}/></label><button className="secondary" onClick={applyWebsitePreview}>Use confirmed website details</button></div>}</article>)}<div className="headbuttons"><button className="primary" disabled={busy} onClick={()=>void saveQuickImport()}>Save to workspace</button><button className="secondary" onClick={()=>{QuickImportPreview(null);QuickImportError('');WebsitePreview(null);}}>Cancel</button></div></div>}
-    <div className="workflow-next-step"><span>Next: check each saved website for specific issues.</span><button type="button" className="primary" disabled={!businesses.length} onClick={() => selectWorkflowStep('analyze')}>Continue to Website audit</button></div>
+    <div className="workflow-next-step"><span>Next: copy website context to ChatGPT. No audit is required.</span><button type="button" className="primary" disabled={!businesses.length} onClick={() => selectWorkflowStep('analyze')}>Prepare website context</button></div>
     </section>
       <section id="v2-queue" className="panel v2-view-panel">
-      <div className="between"><div><h2>3. Website audit</h2><p>{businesses.length} businesses saved · {analyses.length} website reviews · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current website' : `Audit pending websites (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
-      <p className="muted">Scan up to 25 saved businesses per run. When an official website is available, the local analyzer checks its public pages and records evidence for website opportunities. A missing website is assessed as a separate opportunity. Successful results are saved individually; failed scans remain pending for retry.</p>
+      <div className="between"><div><h2>3. Prepare website context</h2><p>{businesses.length} saved prospects. Copy their existing facts into ChatGPT; no website audit or qualification is required.</p></div><button className="secondary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current website' : `Optional website audit (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length} pending)`}</button></div>
+      <p className="muted">Copy the saved business details below into ChatGPT and ask it to research the public website. Page reading may be incomplete or blocked, so missing page details never prevent you from continuing. The website audit remains an optional legacy tool.</p>
       {queueProgress && <div className="opportunity-notice" role="status"><strong>Processing {queueProgress.done + queueProgress.failed + 1} of {queueProgress.total}</strong> · {queueProgress.current} · {queueProgress.done} saved · {queueProgress.failed} failed <progress max={queueProgress.total} value={queueProgress.done + queueProgress.failed}/></div>}
       {Object.keys(queueFailures).length > 0 && <div className="opportunity-notice"><div className="between"><strong>{Object.keys(queueFailures).length} businesses need attention</strong><button className="secondary" disabled={busy} onClick={() => void retryFailures()}>Retry failed analyses</button></div><ul>{businesses.filter(b => queueFailures[b.id]).slice(0,10).map(b => <li key={b.id}><b>{b.name}:</b> {queueFailures[b.id]}</li>)}</ul></div>}
       <div className="headbuttons"><label>Show<select value={filter} onChange={e => Filter(e.target.value)}><option value="all">All businesses</option><option value="no-site">No website found</option><option value="outdated">Outdated websites</option><option value="unreviewed">Not analyzed yet</option></select></label></div>
@@ -573,12 +620,16 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
           <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">{business.websiteUrl}</a> : 'No website URL recorded'}{business.rating !== null ? ` · ★ ${business.rating}` : ''}{business.reviewCount !== null ? ` · ${business.reviewCount} reviews` : ''}{business.sourceUrl ? <> · <a href={business.sourceUrl} target="_blank" rel="noopener noreferrer">Discovery source</a></> : ''}</p>
           <p>Discovery source: {business.discoverySource || 'Not recorded'}</p>{queueFailures[business.id] && <p className="error" role="alert">Analysis needs retry: {queueFailures[business.id]}</p>}
           {analysis ? <><div className="opportunity-score"><strong>Website opportunity priority: {analysis.totalScore}/100</strong><span>Website audit evidence confidence: {analysis.evidenceConfidence}%</span></div><ul className="opportunity-signals">{top.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority}</b> — {item.rationale}</li>)}</ul><details><summary>Website audit evidence and priority details</summary>{analysis.scoreBreakdown && <section aria-label="Opportunity score breakdown"><h4>How this priority score was calculated</h4><p className="muted">This is a lead-priority indicator based on website need and available context. It is not a website quality grade; the evidence below lists confirmed observations.</p><ul className="opportunity-signals">{analysis.scoreBreakdown.explanation.map((line,index)=><li key={index}>{line}</li>)}</ul></section>}<h4>Potential website service areas</h4><ul className="opportunity-signals">{analysis.opportunities.map(item => <li key={item.service}><b>{item.service.replace('_', ' ')} · {item.priority} ({item.score}/100)</b> — {item.rationale}</li>)}</ul><p>{analysis.evidence.length ? `${analysis.evidence.length} website evidence items collected.` : business.websiteUrl ? 'No technical issues were confirmed in this scan; no problems are inferred.' : 'No website audit was possible because no official website URL is recorded.'}</p>{analysis.evidence.map(item => <p key={item.id}><b>[{item.confidence}] {item.signal}</b> — {item.description} {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a>}</p>)}</details></> : <p className="muted">Not reviewed yet. Add an official website before running a technical audit. Without a website, the review can only record the missing-site opportunity. The website scan uses the local analyzer; no paid AI service is called.</p>}
-          <div className="headbuttons"><button className="primary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Re-run website audit' : business.websiteUrl ? 'Run website audit' : 'Assess website opportunity'}</button>{analysis && <button className="secondary" onClick={() => { startAgentResearch(business.id,analysis.researchNotes?'follow_up':'investigate'); selectWorkflowStep('qualify'); }}>Continue to Research & qualify</button>}<button className="danger-outline" disabled={busy} onClick={() => DeleteTarget(business)}>Delete prospect</button></div>
+          <div className="headbuttons"><button className="primary" onClick={() => void copyPrompt(buildWebsiteContextPrompt(business))}>Copy Website Context for ChatGPT</button><button className="secondary" disabled={busy} onClick={() => void analyzeOne(business)}>{analysis ? 'Optional: re-run website audit' : business.websiteUrl ? 'Optional: run website audit' : 'Optional: assess website opportunity'}</button>{analysis && <button className="secondary" onClick={() => { startAgentResearch(business.id,analysis.researchNotes?'follow_up':'investigate'); selectWorkflowStep('qualify'); }}>Continue to Research & qualify</button>}<button className="danger-outline" disabled={busy} onClick={() => DeleteTarget(business)}>Delete prospect</button></div>
         </article>;
       })}</div>
     </section>
 <section id="v2-qualify" className="panel v2-view-panel">
-      <div className="between"><div><h2>4. Research & qualify</h2><p>Review the website audit, import sourced ChatGPT research here, then prepare a qualification brief for outreach. Research JSON is imported below; the brief is copy-only.</p></div><span className="muted">{qualificationCounts.ready} ready for review · {qualificationCounts.research} research next</span></div>
+      <div className="between"><div><h2>4. Prototype and outreach</h2><p>Choose any saved prospect. Save its prototype and copy ChatGPT context. No audit, research import, or qualification is required.</p></div><span className="muted">{businesses.length} saved prospects</span></div>
+      {businesses.length > 0 ? <><label>Select a prospect<select aria-label="Select a prospect for its prototype workspace" value={journeyBusinessId || businesses[0].id} onChange={e => JourneyBusinessId(e.target.value)}>{businesses.map(business => <option key={business.id} value={business.id}>{business.name}{business.location ? ' · ' + business.location : ''}</option>)}</select></label>{(() => { const business = businesses.find(item => item.id === (journeyBusinessId || businesses[0].id)) ?? businesses[0]; return <article className="panel opportunity-card"><ProspectStudio key={business.id} business={business} onSave={(journey,event,notes) => saveClientJourney(business.id,journey,event,notes)}/></article>; })()}</> : <p className="empty">Import or discover a business first. You can prepare context and save a prototype without running an audit.</p>}
+      <details className="legacy-workflow-tools"><summary>Optional legacy research, analysis, and qualification tools</summary>
+
+      <div className="between"><div><h2>Legacy research and qualification</h2><p>These optional tools remain available for existing workflows and saved history.</p></div><span className="muted">{qualificationCounts.ready} ready for review · {qualificationCounts.research} research next</span></div>
       <div className="headbuttons"><label>Qualification stage<select value={qualificationFilter} onChange={e => QualificationFilter(e.target.value as QualificationTier | 'all')}><option value="all">All ({shortlist.length})</option><option value="ready">Ready for human review ({qualificationCounts.ready})</option><option value="research">Research next ({qualificationCounts.research})</option><option value="verify">Verify details ({qualificationCounts.verify})</option><option value="analyze">Needs analysis ({qualificationCounts.analyze})</option></select></label></div>
       {!shortlisted.length && <p className="muted">No businesses in this qualification stage yet.</p>}
       <div className="opportunity-list">{shortlisted.slice(0,40).map(item => <article key={item.business.id} className="panel opportunity-card">
@@ -596,9 +647,11 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
 
       </article>)}</div>
       {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
-    </section>
+    
+      </details>
+</section>
     <section id="v2-followup" className="panel v2-view-panel workflow-outreach-panel">
-      <div className="between"><div><h2>5. Outreach & follow-ups</h2><p>Keep each prospect’s outreach history, pipeline stage, and next action on the same saved business record.</p></div></div>
+      <div className="between"><div><h2>5. Pipeline and follow-ups</h2><p>Keep each prospect’s outreach history, pipeline stage, and next action on the same saved business record.</p></div></div>
       <div className="workflow-outreach-summary">
         <div><strong>{businesses.filter(b => !!b.pipelineStage).length}</strong><span>In pipeline</span></div>
         <div><strong>{outreachActivities.length}</strong><span>Businesses with contact history</span></div>

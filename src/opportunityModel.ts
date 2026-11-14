@@ -19,7 +19,7 @@ export type ProspectCommunication = {
   notes: string;
 };
 export type ClientJourney = {
-  prototype: { url: string; platform: string; completedAt: string; notes: string; improvements: string };
+  prototype: { url: string; platform: string; completedAt: string; notes: string; improvements: string; projectReference?: string; updatedAt?: string };
   promptSnapshots: { kind: 'website_rebuild' | 'outreach' | 'follow_up'; text: string; generatedAt: string }[];
   communications: ProspectCommunication[];
 };
@@ -44,6 +44,8 @@ export type BusinessRecord = {
   pipelineStage?: PipelineStage;
   /** Optional V3 prototype, prompt, and actual communication history saved in the existing JSONB business record. */
   clientJourney?: ClientJourney;
+  /** Optional user-provided context for a website redesign conversation. */
+  contextNotes?: string;
 };
 
 export type OpportunityEvidence = {

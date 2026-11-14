@@ -1,28 +1,139 @@
-import { useState } from 'react';
-import type { BusinessRecord, ClientJourney, OpportunityAnalysis, ProspectCommunication } from './opportunityModel';
-import { buildEvidenceReportHtml, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteRebuildPrompt, emptyClientJourney } from './prospectStudio';
+import { useEffect, useRef, useState } from 'react';
+import type { BusinessRecord, ClientJourney, ProspectCommunication } from './opportunityModel';
+import { buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, emptyClientJourney, isSafeHttpUrl } from './prospectStudio';
 
-type Props={business:BusinessRecord;analysis?:OpportunityAnalysis;onSave:(journey:ClientJourney,event?:ProspectCommunication)=>Promise<void>};
-async function copyText(text:string){
- try{await navigator.clipboard.writeText(text);return true}catch{
-  const field=document.createElement('textarea');field.value=text;field.style.position='fixed';field.style.opacity='0';document.body.append(field);field.select();const ok=document.execCommand('copy');field.remove();return ok;
- }
+type Props = {
+  business: BusinessRecord;
+  onSave: (journey: ClientJourney, event?: ProspectCommunication, contextNotes?: string) => Promise<void>;
+};
+async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    const field = document.createElement('textarea');
+    field.value = text; field.style.position = 'fixed'; field.style.opacity = '0';
+    document.body.append(field); field.select();
+    const ok = document.execCommand('copy'); field.remove(); return ok;
+  }
 }
-export function ProspectStudio({business,analysis,onSave}:Props){
- const [journey,setJourney]=useState<ClientJourney>(()=>business.clientJourney??emptyClientJourney());
- const [prompt,setPrompt]=useState(''),[kind,setKind]=useState<ProspectCommunication['kind']>('sent'),[channel,setChannel]=useState<ProspectCommunication['channel']>('email');
- const [subject,setSubject]=useState(''),[message,setMessage]=useState(''),[contact,setContact]=useState(business.email||''),[followUpAt,setFollowUpAt]=useState(''),[notes,setNotes]=useState('');
- const [busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState('');
- const updatePrototype=(key:keyof ClientJourney['prototype'],value:string)=>setJourney(current=>({...current,prototype:{...current.prototype,[key]:value}}));
- const saveJourney=async()=>{setBusy(true);setError('');setNotice('');try{await onSave(journey);setNotice('Prototype and client journey saved to this business record.')}catch(e){setError(e instanceof Error?e.message:'Could not save the client journey.')}finally{setBusy(false)}};
- const generate=(type:'website_rebuild'|'outreach'|'follow_up')=>{const text=type==='website_rebuild'?buildWebsiteRebuildPrompt(business,analysis):type==='outreach'?buildOutreachPrompt(business,analysis):buildFollowUpPrompt({...business,clientJourney:journey});setPrompt(text);setJourney(current=>({...current,promptSnapshots:[...current.promptSnapshots,{kind:type,text,generatedAt:new Date().toISOString()}].slice(-30)}));setNotice('Prompt prepared. Review it, then copy it to ChatGPT or another external tool.')};
- const saveEvent=async()=>{if(!message.trim()&&kind!=='meeting'&&kind!=='note'){setError('Add the exact message or a note describing this activity.');return}setBusy(true);setError('');setNotice('');try{const event:ProspectCommunication={id:crypto.randomUUID(),kind,channel,subject,message,contact,occurredAt:new Date().toISOString(),prototypeUrl:journey.prototype.url,followUpAt:followUpAt?new Date(followUpAt+'T12:00:00').toISOString():'',notes};await onSave(journey,event);setJourney(current=>({...current,communications:[...current.communications,event].slice(-500)}));setSubject('');setMessage('');setNotes('');setNotice(kind==='sent'?'Actual message recorded. No message was sent by Lead Hunter.':'Activity recorded on this business.');}catch(e){setError(e instanceof Error?e.message:'Could not save communication history.')}finally{setBusy(false)}};
- const report=()=>{const w=window.open('','_blank');if(!w){setError('Allow pop-ups for this site to print or save the report as PDF.');return}w.document.open();w.document.write(buildEvidenceReportHtml(business,analysis));w.document.close()};
- return <section className="prospect-studio" aria-label={`Client journey for ${business.name}`}><h4>Client journey</h4><p className="muted">Save a prototype, prepare external prompts, and record real contact. Lead Hunter never sends messages.</p>
-  <details><summary>Prototype and website improvement report</summary><div className="formgrid"><label>Prototype URL<input type="url" value={journey.prototype.url} placeholder="https://" onChange={e=>updatePrototype('url',e.target.value)}/></label><label>Platform<input value={journey.prototype.platform} maxLength={120} placeholder="e.g. Vercel preview" onChange={e=>updatePrototype('platform',e.target.value)}/></label><label>Completion date<input type="date" value={journey.prototype.completedAt.slice(0,10)} onChange={e=>updatePrototype('completedAt',e.target.value)}/></label><label>Improvements included<textarea rows={3} maxLength={5000} value={journey.prototype.improvements} onChange={e=>updatePrototype('improvements',e.target.value)}/></label><label>Notes<textarea rows={3} maxLength={3000} value={journey.prototype.notes} onChange={e=>updatePrototype('notes',e.target.value)}/></label></div><div className="headbuttons"><button className="primary" disabled={busy} onClick={()=>void saveJourney()}>Save prototype details</button><button className="secondary" onClick={report}>Print / save evidence report as PDF</button>{journey.prototype.url&&<a className="secondary" href={journey.prototype.url} target="_blank" rel="noopener noreferrer">Open prototype</a>}</div></details>
-  <details><summary>Research and website build prompt</summary><p>Creates an evidence-grounded prompt for external research and a website building tool. Unknown facts stay marked for confirmation.</p><button className="secondary" onClick={()=>generate('website_rebuild')}>Create website rebuild research prompt</button></details>
-  <details><summary>Outreach and follow-up prompts</summary><div className="headbuttons"><button className="secondary" onClick={()=>generate('outreach')}>Prepare outreach prompt</button><button className="secondary" onClick={()=>generate('follow_up')}>Prepare follow-up prompt</button></div></details>
-  {prompt&&<div className="studio-prompt"><label>Review generated prompt<textarea rows={12} value={prompt} onChange={e=>setPrompt(e.target.value)}/></label><div className="headbuttons"><button className="primary" onClick={()=>void copyText(prompt).then(ok=>setNotice(ok?'Prompt copied. Paste it into your external AI tool.':'Could not copy; select and copy the prompt manually.'))}>Copy prompt</button><button className="secondary" onClick={()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([prompt],{type:'text/plain'}));a.download=`${business.name.replace(/[^a-z0-9_-]+/gi,'-')}-prompt.txt`;a.click();URL.revokeObjectURL(a.href)}}>Download prompt</button><button className="secondary" onClick={()=>void saveJourney()}>Save prompt snapshot</button></div></div>}
-  <details><summary>Record an actual message, reply, meeting, or outcome ({journey.communications.length})</summary><div className="formgrid"><label>Activity<select value={kind} onChange={e=>setKind(e.target.value as ProspectCommunication['kind'])}>{['sent','reply','meeting','interested','won','lost','note'].map(v=><option key={v} value={v}>{v==='sent'?'Message sent':v[0].toUpperCase()+v.slice(1)}</option>)}</select></label><label>Channel<select value={channel} onChange={e=>setChannel(e.target.value as ProspectCommunication['channel'])}>{['email','phone','contact_form','meeting','other'].map(v=><option key={v} value={v}>{v.replace('_',' ')}</option>)}</select></label><label>Contact<input value={contact} maxLength={300} onChange={e=>setContact(e.target.value)}/></label><label>Subject<input value={subject} maxLength={500} onChange={e=>setSubject(e.target.value)}/></label><label>Next follow-up date<input type="date" value={followUpAt} onChange={e=>setFollowUpAt(e.target.value)}/></label><label>Exact message or activity<textarea rows={5} maxLength={20000} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Paste the message you actually sent, or summarize the activity."/></label><label>Notes<textarea rows={3} maxLength={3000} value={notes} onChange={e=>setNotes(e.target.value)}/></label></div><button className="primary" disabled={busy} onClick={()=>void saveEvent()}>Record activity</button>{journey.communications.length>0&&<ol className="studio-history">{journey.communications.map(event=><li key={event.id}><strong>{event.kind}</strong> · {event.channel} · {new Date(event.occurredAt).toLocaleString()}{event.subject&&<div>{event.subject}</div>}{event.message&&<pre>{event.message}</pre>}{event.notes&&<p>{event.notes}</p>}</li>)}</ol>}</details>
- {notice&&<p className="opportunity-notice" role="status">{notice}</p>}{error&&<p className="error" role="alert">{error}</p>}</section>
+const localToday = () => {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+};
+
+export function ProspectStudio({ business, onSave }: Props) {
+  const [journey, setJourney] = useState<ClientJourney>(() => business.clientJourney ?? emptyClientJourney());
+  const [contextNotes, setContextNotes] = useState(business.contextNotes ?? '');
+  const [kind, setKind] = useState<ProspectCommunication['kind']>('sent');
+  const [channel, setChannel] = useState<ProspectCommunication['channel']>('email');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [contact, setContact] = useState(business.email || '');
+  const [activityDate, setActivityDate] = useState(localToday());
+  const [followUpAt, setFollowUpAt] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const lock = useRef(false);
+  const pendingEventId = useRef<string | null>(null);
+  const persistedKey = JSON.stringify([business.clientJourney ?? null, business.contextNotes ?? '', business.email]);
+
+  useEffect(() => {
+    setJourney(business.clientJourney ?? emptyClientJourney());
+    setContextNotes(business.contextNotes ?? '');
+    setContact(business.email || '');
+  }, [business.id, persistedKey]);
+
+  const persist = async (nextJourney = journey, event?: ProspectCommunication, nextNotes = contextNotes) => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError(''); setNotice('');
+    try {
+      await onSave(nextJourney, event, nextNotes);
+      if (event) pendingEventId.current = null;
+      setJourney(current => event && !current.communications.some(item => item.id === event.id)
+        ? { ...nextJourney, communications: [...nextJourney.communications, event] }
+        : nextJourney);
+      setNotice(event ? (event.kind === 'sent' ? 'Sent message recorded. Lead Hunter did not send it.' : 'Activity recorded for this prospect.') : 'Prospect details saved.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save this prospect update.');
+    } finally { lock.current = false; setBusy(false); }
+  };
+
+  const savePrototype = () => {
+    const url = journey.prototype.url.trim();
+    if (!url) { setError('Enter the prototype URL before saving it.'); return; }
+    if (!isSafeHttpUrl(url)) { setError('Prototype URL must be a complete HTTP or HTTPS address.'); return; }
+    const next: ClientJourney = { ...journey, prototype: { ...journey.prototype, url, updatedAt: new Date().toISOString() } };
+    void persist(next);
+  };
+  const copy = async (text: string, label: string) => {
+    setError(''); setNotice(await copyText(text) ? label + ' copied. Paste it into ChatGPT.' : 'Copy was blocked. Select and copy the text manually.');
+  };
+  const saveEvent = () => {
+    if (journey.communications.length >= 500) { setError('This prospect has reached the 500-entry history limit. All existing history is preserved; no older entries were removed.'); return; }
+    if (!activityDate) { setError('Choose the actual date of this message or activity.'); return; }
+    if (kind === 'sent' && !message.trim()) { setError('Paste the exact message you sent before recording it.'); return; }
+    if (kind !== 'sent' && !message.trim() && kind !== 'meeting' && kind !== 'note') { setError('Add the message or reply text so the complete history is retained.'); return; }
+    const stamp = (value: string) => value ? new Date(value + 'T12:00:00').toISOString() : '';
+    const event: ProspectCommunication = {
+      id: pendingEventId.current ?? (pendingEventId.current = crypto.randomUUID()), kind, channel, subject, message, contact,
+      occurredAt: stamp(activityDate), prototypeUrl: journey.prototype.url,
+      followUpAt: stamp(followUpAt), notes,
+    };
+    void persist(journey, event);
+  };
+  const updatePrototype = (key: keyof ClientJourney['prototype'], value: string) =>
+    setJourney(current => ({ ...current, prototype: { ...current.prototype, [key]: value } }));
+
+  return <section className="prospect-studio" aria-label={'Client journey for ' + business.name}>
+    <div className="studio-business">
+      <h3>Website context</h3>
+      <p><strong>{business.name}</strong> · {[business.category, business.location].filter(Boolean).join(' · ') || 'Industry and location not recorded'}</p>
+      <p>{business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noopener noreferrer">Original website: {business.websiteUrl}</a> : 'Original website not recorded'}</p>
+      {business.websiteUrl && <a className="secondary" href={business.websiteUrl} target="_blank" rel="noopener noreferrer">Open original website</a>}
+      <label>Additional business or website context<textarea rows={2} maxLength={5000} value={contextNotes} onChange={e => setContextNotes(e.target.value)} placeholder="Services, audience, brand details, or anything you already know."/></label>
+      <div className="headbuttons">
+        <button className="primary" disabled={busy} onClick={() => void copy(buildWebsiteContextPrompt(business, contextNotes), 'Website context')}>Copy Website Context for ChatGPT</button>
+        <button className="secondary" disabled={busy} onClick={() => void persist(journey, undefined, contextNotes)}>Save context notes</button>
+      </div>
+      <p className="muted">Lead Hunter provides saved facts only. ChatGPT performs the research and writes the website build prompt. No audit is required.</p>
+    </div>
+
+    <div className="studio-prototype">
+      <h3>Prototype</h3>
+      <div className="formgrid">
+        <label>Prototype URL<input type="url" maxLength={2048} value={journey.prototype.url} placeholder="https://your-preview.example" onChange={e => updatePrototype('url', e.target.value)}/></label>
+        <label>Platform (optional)<input value={journey.prototype.platform} maxLength={120} placeholder="e.g. Vercel" onChange={e => updatePrototype('platform', e.target.value)}/></label>
+        <label>Project reference (optional)<input value={journey.prototype.projectReference ?? ''} maxLength={200} placeholder="e.g. ABC-Dental-Redesign" onChange={e => updatePrototype('projectReference', e.target.value)}/></label>
+        <label>Prototype creation date<input type="date" value={journey.prototype.completedAt.slice(0,10)} onChange={e => updatePrototype('completedAt', e.target.value)}/></label>
+        <label>Improvements or redesign notes<textarea rows={3} maxLength={5000} value={journey.prototype.improvements || journey.prototype.notes} onChange={e => { updatePrototype('improvements', e.target.value); updatePrototype('notes', e.target.value); }}/></label>
+      </div>
+      <div className="headbuttons">
+        <button className="primary" disabled={busy || !journey.prototype.url.trim()} onClick={savePrototype}>Save Prototype</button>
+        {journey.prototype.url && isSafeHttpUrl(journey.prototype.url) && <a className="secondary" href={journey.prototype.url} target="_blank" rel="noopener noreferrer">Open Prototype</a>}
+        <button className="secondary" disabled={busy} onClick={() => void copy(buildOutreachPrompt({ ...business, contextNotes, clientJourney: journey }), 'Outreach context')}>Copy Outreach Context for ChatGPT</button>
+      </div>
+      {journey.prototype.updatedAt && <p className="muted">Last updated {new Date(journey.prototype.updatedAt).toLocaleString()}.</p>}
+    </div>
+
+    <div className="studio-outreach">
+      <h3>Outreach and follow-up</h3>
+      <p className="muted">ChatGPT drafts the message. Send it yourself, then record the exact message here.</p>
+      {journey.communications.length > 0 && <button className="secondary" disabled={busy} onClick={() => void copy(buildFollowUpPrompt({ ...business, contextNotes, clientJourney: journey }), 'Follow-up context')}>Copy Follow-up Context for ChatGPT</button>}
+      <div className="formgrid">
+        <label>Activity<select value={kind} onChange={e => setKind(e.target.value as ProspectCommunication['kind'])}>{['sent','reply','meeting','interested','won','lost','note'].map(v => <option key={v} value={v}>{v === 'sent' ? 'Message sent' : v[0].toUpperCase()+v.slice(1)}</option>)}</select></label>
+        <label>Channel<select value={channel} onChange={e => setChannel(e.target.value as ProspectCommunication['channel'])}>{['email','contact_form','phone','meeting','other'].map(v => <option key={v} value={v}>{v.replace('_',' ')}</option>)}</select></label>
+        <label>Contact or recipient<input value={contact} maxLength={300} onChange={e => setContact(e.target.value)}/></label>
+        <label>Subject<input value={subject} maxLength={500} onChange={e => setSubject(e.target.value)}/></label>
+        <label>Date<input type="date" required value={activityDate} onChange={e => setActivityDate(e.target.value)}/></label>
+        <label>Follow-up date (optional)<input type="date" value={followUpAt} onChange={e => setFollowUpAt(e.target.value)}/></label>
+        <label>Exact message sent, reply, or activity<textarea rows={5} maxLength={20000} value={message} onChange={e => setMessage(e.target.value)} placeholder={kind === 'sent' ? 'Paste the exact message you sent.' : 'Record the complete reply or activity details.'}/></label>
+        <label>Notes (optional)<textarea rows={2} maxLength={3000} value={notes} onChange={e => setNotes(e.target.value)}/></label>
+      </div>
+      <p className="muted">Each entry can contain up to 20,000 characters; history keeps up to 500 entries. Saved history is never automatically removed.</p><button className="primary" disabled={busy} onClick={saveEvent}>Record actual activity</button>
+      {journey.communications.length > 0 && <details className="studio-history"><summary>Complete communication history ({journey.communications.length})</summary><ol>{journey.communications.map(event => <li key={event.id}><strong>{event.kind}</strong> · {event.channel} · {new Date(event.occurredAt).toLocaleString()}<p>Contact: {event.contact || 'Not recorded'}{event.subject ? ' · Subject: ' + event.subject : ''}</p>{event.message && <pre>{event.message}</pre>}{event.prototypeUrl && <p>Prototype proposed: <a href={event.prototypeUrl} target="_blank" rel="noopener noreferrer">{event.prototypeUrl}</a></p>}{event.followUpAt && <p>Follow-up: {new Date(event.followUpAt).toLocaleDateString()}</p>}{event.notes && <p>{event.notes}</p>}</li>)}</ol></details>}
+    </div>
+    {notice && <p className="opportunity-notice" role="status">{notice}</p>}
+    {error && <p className="error" role="alert">{error}</p>}
+  </section>;
 }
