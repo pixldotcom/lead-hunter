@@ -18,6 +18,23 @@ export function validateBusinessRecord(value: unknown): BusinessRecord {
   if (!['id','name','category','location','websiteUrl','websiteStatus','phone','email','discoverySource','sourceUrl','discoveredAt','updatedAt'].every(key => isText(value[key]))) throw Error('Business record is missing required text fields.');
   if (!b.id.trim() || !b.name.trim() || !websiteStatuses.includes(b.websiteStatus) || !optionalNumber(b.rating, 5) || !optionalNumber(b.reviewCount, 100000000) || (b.rating !== null && b.rating > 5) || (b.reviewCount !== null && !Number.isSafeInteger(b.reviewCount)) || !Array.isArray(b.profiles) || b.profiles.length > 30 || b.profiles.some(p => !isText(p) || p.length > 200) || !validDate(b.discoveredAt) || !validDate(b.updatedAt)) throw Error('Invalid business record fields.');
   if (b.pipelineStage !== undefined && !PIPELINE_STAGES.includes(b.pipelineStage)) throw Error('Invalid pipeline stage.');
+
+  if (b.clientJourney !== undefined) {
+    const j = b.clientJourney;
+    const validHttp = (url: unknown) => isText(url) && (!url || /^https?:\/\//i.test(url)) && url.length <= 2048;
+    const communicationKinds = ['sent','reply','meeting','interested','won','lost','note'];
+    const communicationChannels = ['email','phone','contact_form','meeting','other'];
+    if (!isObject(j) || !isObject(j.prototype) || !validHttp(j.prototype.url) ||
+      !['platform','completedAt','notes','improvements'].every(key => isText(j.prototype[key])) ||
+      j.prototype.platform.length > 120 || j.prototype.completedAt.length > 80 || j.prototype.notes.length > 3000 || j.prototype.improvements.length > 5000 ||
+      !Array.isArray(j.promptSnapshots) || j.promptSnapshots.length > 30 ||
+      j.promptSnapshots.some(p => !isObject(p) || !['website_rebuild','outreach','follow_up'].includes(String(p.kind)) || !isText(p.text) || p.text.length > 30000 || !validDate(p.generatedAt)) ||
+      !Array.isArray(j.communications) || j.communications.length > 500 ||
+      j.communications.some(c => !isObject(c) || !isText(c.id) || !c.id || !communicationKinds.includes(String(c.kind)) || !communicationChannels.includes(String(c.channel)) ||
+        !['subject','message','contact','occurredAt','prototypeUrl','followUpAt','notes'].every(key => isText(c[key])) ||
+        c.subject.length > 500 || c.message.length > 20000 || c.contact.length > 300 || !validDate(c.occurredAt) || !validHttp(c.prototypeUrl) || !validDate(c.followUpAt) || c.notes.length > 3000))
+      ) throw Error('Invalid saved client journey details.');
+  }
   if (b.websiteUrl && !/^https?:\/\//i.test(b.websiteUrl)) throw Error('Business website must use HTTP or HTTPS.');
   if (b.sourceUrl && !/^https?:\/\//i.test(b.sourceUrl)) throw Error('Business source must use HTTP or HTTPS.');
   if (b.websiteUrl.length > 2048 || b.sourceUrl.length > 2048 || b.name.trim().length > 200 || b.location.length > 200 || b.category.length > 120) throw Error('Business fields exceed their allowed length.');
