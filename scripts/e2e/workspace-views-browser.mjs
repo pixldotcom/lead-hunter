@@ -21,6 +21,9 @@ try{
   await browser.wait("!!document.querySelector('[name=email]')");
   await browser.input('[name=email]',fixture.users[0].email);await browser.input('[name=password]',fixture.users[0].password);await browser.click('Log in');
   await browser.wait("!!document.querySelector('.quick-import-panel')");
+  await browser.wait("document.querySelector('#account-session-tools .session-control')?.textContent.includes('Log out')");
+  assert.equal(await browser.evaluate("document.querySelector('#account-session-tools .session-email')?.textContent"),fixture.users[0].email,'signed-in email should appear in the left rail');
+  assert.equal(await browser.evaluate("document.querySelectorAll('.session-control').length"),1,'account controls should no longer occupy the top content row');
   assert.ok(await browser.evaluate("document.querySelector('#cloud-settings-tools')"),'cloud and migration utilities should have a Settings destination');
   assert.equal(await browser.evaluate("document.querySelector('.cloud-status')"),null,'cloud status should not occupy the landing workflow');
   await browser.click('Settings');await browser.wait("document.querySelector('#cloud-settings-tools .cloud-status')?.textContent.includes('Cloud records loaded')");
