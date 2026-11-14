@@ -481,3 +481,18 @@ a,.linkbtn{color:var(--brand-orange)}
 /* Account identity and sign-out controls belong at the foot of the navigation rail. */
 .account-session-tools{width:100%;min-width:0}.account-session-tools .session-control{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:7px;width:100%;margin:0;padding:10px 5px;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;font-size:.62rem}.account-session-tools .session-email{display:block;min-width:0;overflow-wrap:anywhere;word-break:break-word;white-space:normal;font-size:.62rem;line-height:1.45}.account-session-tools .session-control>.secondary{width:100%;min-height:34px;padding:6px 8px;font-size:.63rem}.account-session-tools .session-control p{grid-column:1/-1;margin:0;font-size:.62rem;overflow-wrap:anywhere}
 @media(max-width:1000px){.account-session-tools{grid-column:1/-1}.account-session-tools .session-control{grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}.account-session-tools .session-control>.secondary{width:auto;min-width:75px}}
+
+
+/* V3 prospect studio */
+.prospect-studio{display:grid;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--line,#30343d);border-radius:12px;background:rgba(255,255,255,.018)}
+.prospect-studio>h4{margin:0}
+.prospect-studio details{padding:12px;border:1px solid var(--line,#30343d);border-radius:9px}
+.prospect-studio summary{cursor:pointer;font-weight:650}
+.prospect-studio details>p{color:var(--muted,#9aa4b5)}
+.prospect-studio .formgrid{margin:14px 0}
+.prospect-studio textarea{width:100%;resize:vertical}
+.studio-prompt{display:grid;gap:10px;padding:12px;background:rgba(55,87,245,.08);border-radius:10px}
+.studio-history{padding-left:24px}
+.studio-history li{margin:12px 0;overflow-wrap:anywhere}
+.studio-history pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}
+@media(max-width:700px){.prospect-studio{padding:12px}.prospect-studio .headbuttons>*{flex:1 1 100%}}

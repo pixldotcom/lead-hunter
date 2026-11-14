@@ -5,6 +5,25 @@ export type OpportunityPriority = 'high' | 'medium' | 'low' | 'unverified';
 export const PIPELINE_STAGES = ['new','researching','qualified','ready_to_pitch','contacted','negotiating','won','lost'] as const;
 export type PipelineStage = typeof PIPELINE_STAGES[number];
 
+
+export type ProspectCommunication = {
+  id: string;
+  kind: 'sent' | 'reply' | 'meeting' | 'interested' | 'won' | 'lost' | 'note';
+  channel: 'email' | 'phone' | 'contact_form' | 'meeting' | 'other';
+  subject: string;
+  message: string;
+  contact: string;
+  occurredAt: string;
+  prototypeUrl: string;
+  followUpAt: string;
+  notes: string;
+};
+export type ClientJourney = {
+  prototype: { url: string; platform: string; completedAt: string; notes: string; improvements: string };
+  promptSnapshots: { kind: 'website_rebuild' | 'outreach' | 'follow_up'; text: string; generatedAt: string }[];
+  communications: ProspectCommunication[];
+};
+
 export type BusinessRecord = {
   id: string;
   name: string;
@@ -23,6 +42,8 @@ export type BusinessRecord = {
   updatedAt: string;
   /** Optional workflow state; omitted legacy records are derived from analysis and outreach history. */
   pipelineStage?: PipelineStage;
+  /** Optional V3 prototype, prompt, and actual communication history saved in the existing JSONB business record. */
+  clientJourney?: ClientJourney;
 };
 
 export type OpportunityEvidence = {
