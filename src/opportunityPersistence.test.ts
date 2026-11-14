@@ -18,6 +18,21 @@ describe('opportunity business persistence', () => {
     expect(() => parseImportedResearch('\`\`\`json\n' + JSON.stringify({summary:'Unsupported',facts:[{claim:'Claim',sourceUrl:''}]}) + '\n\`\`\`')).toThrow(/source URL/);
   });
 
+  it('accepts escaped ChatGPT JSON with HTML-encoded spacing', () => {
+    const payload = JSON.stringify({ summary: 'Identity checked', facts: [{ claim: 'Address verified from public listing', sourceUrl: 'https://example.org/listing' }], hypotheses: [], unknowns: ['Confirm the legal business name'], nextSteps: ['1. Confirm the entity', '2. Check the official website'] });
+    const copied = payload.replace(/"/g, '\\\"').replace(/ /g, '&amp;#x20;');
+    const notes = parseImportedResearch(copied);
+    expect(notes.summary).toBe('Identity checked');
+    expect(notes.facts[0].claim).toBe('Address verified from public listing');
+    expect(notes.nextSteps).toEqual(['1. Confirm the entity', '2. Check the official website']);
+  });
+
+  it('extracts a JSON object from a ChatGPT explanation and code block', () => {
+    const payload = JSON.stringify({ summary: 'Checked sources', facts: [], hypotheses: [], unknowns: [], nextSteps: [] });
+    const notes = parseImportedResearch('Here is the requested research:\n```json\n' + payload + '\n```\nYou can verify the linked sources.');
+    expect(notes.summary).toBe('Checked sources');
+  });
+
   it('rejects research claims without an HTTP source and oversized input', () => {
     expect(() => parseImportedResearch(JSON.stringify({ summary: 'Summary', facts: [{ claim: 'Unverified', sourceUrl: '' }] }))).toThrow(/source URL/);
     expect(() => parseImportedResearch('x'.repeat(20001))).toThrow(/20 KB/);
