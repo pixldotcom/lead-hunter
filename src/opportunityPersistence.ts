@@ -32,7 +32,7 @@ export function validateBusinessRecord(value: unknown): BusinessRecord {
       !Array.isArray(j.communications) || j.communications.length > 500 ||
       j.communications.some(c => !isObject(c) || !isText(c.id) || !c.id || !communicationKinds.includes(String(c.kind)) || !communicationChannels.includes(String(c.channel)) ||
         !['subject','message','contact','occurredAt','prototypeUrl','followUpAt','notes'].every(key => isText(c[key])) ||
-        c.subject.length > 500 || c.message.length > 20000 || c.contact.length > 300 || !validDate(c.occurredAt) || !validHttp(c.prototypeUrl) || !validDate(c.followUpAt) || c.notes.length > 3000))
+        c.subject.length > 500 || c.message.length > 20000 || c.contact.length > 300 || !validDate(c.occurredAt) || !validHttp(c.prototypeUrl) || !validDate(c.followUpAt) || c.notes.length > 3000)
       ) throw Error('Invalid saved client journey details.');
   }
   if (b.websiteUrl && !/^https?:\/\//i.test(b.websiteUrl)) throw Error('Business website must use HTTP or HTTPS.');
