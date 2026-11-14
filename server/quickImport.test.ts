@@ -13,8 +13,9 @@ describe('Quick Import', () => {
       { name: 'Oak Cafe', location: 'York', websiteUrl: 'https://oak.example/' },
     ]);
   });
-  it('requires a name and location for Maps references and validates all supplied URLs', () => {
-    expect(() => parseQuickImport('https://maps.google.com/maps/place/abc')).toThrow(/business name and location/);
+  it('suggests a name from Maps place links and validates all supplied URLs', () => {
+    expect(parseQuickImport('https://maps.google.com/maps/place/abc')).toMatchObject([{name:'abc',location:'',sourceUrl:'https://maps.google.com/maps/place/abc'}]);
+    expect(parseQuickImport('google.com/maps/place/abc')).toMatchObject([{name:'abc',location:'',sourceUrl:'https://google.com/maps/place/abc'}]);
     expect(() => parseQuickImport('Example | Leeds | javascript:alert(1)')).toThrow(/http:\/\/ or https:\/\//);
     expect(() => parseQuickImport(('Name | Place\n').repeat(101))).toThrow(/100 businesses/);
   });

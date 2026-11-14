@@ -37,7 +37,11 @@ export default async function handler(req: IncomingMessage & {body?:unknown}, re
     if (!response.ok || !/^(text\/html|application\/xhtml\+xml)(?:;|$)/i.test(String(response.headers['content-type'] ?? ''))) return reply(422,{error:'The website did not return a public HTML page that can be read.'});
     return reply(200,extractWebsiteDetails(response.body,url.href));
   } catch(error) {
-    if(error instanceof AuditError) return reply(error.code==='TIMEOUT'?504:422,{error:error.message});
-    return reply(503,{error:abort.aborted?'Website request timed out. Try again later.':'The public website could not be read. Verify its URL and retry.'});
+    if(error instanceof AuditError) {
+      if(error.code==='INCOMPLETE_RESPONSE') return reply(422,{error:'This website stopped the automatic page read before it finished. Page reading is optional; keep the website URL and verify its details manually.'});
+      if(error.code==='TIMEOUT') return reply(504,{error:'This website took too long to respond. Page reading is optional; you can continue and verify details manually.'});
+      return reply(422,{error:error.message});
+    }
+    return reply(503,{error:abort.aborted?'Website request timed out. Page reading is optional; verify details manually.':'The public website could not be read. Page reading is optional; keep the URL and verify details manually.'});
   }
 }

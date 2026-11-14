@@ -33,6 +33,13 @@ try{
   assert.equal(await browser.evaluate("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-discover')"),true,'Business Opportunities should open on the discovery stage');
   assert.equal(await browser.evaluate("getComputedStyle(document.querySelector('#v2-discover')).display!=='none'"),true,'discovery content should be visible in its focused stage');
   assert.equal(await browser.evaluate("getComputedStyle(document.querySelector('#v2-queue')).display"),'none','other workflow stages should be hidden in discovery focus');
+  await browser.evaluate("document.querySelector('[data-workflow-step=import]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-import')");
+  await browser.input('.quick-import-panel textarea','google.com/maps/place/Gyani+Ram+Building+Contractor/@28.4493183,77.054293,13z/data=!4m9');
+  await browser.click('Review import');
+  await browser.wait("document.querySelector('.quick-import-preview')?.textContent.includes('Gyani Ram Building Contractor')");
+  assert.ok(await browser.evaluate("Boolean(document.querySelector('.quick-import-preview input[placeholder=\"City or area\"]'))"),'Maps import review should suggest the place name and allow adding a city');
+  await browser.click('Cancel');
   await browser.evaluate("document.querySelector('[data-workflow-step=analyze]').click()");
   await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-analyze')&&getComputedStyle(document.querySelector('#v2-queue')).display!=='none'");
   assert.equal(await browser.evaluate("new URLSearchParams(location.search).get('workflow')"),'analyze','selected workflow stage should be shareable in the URL');

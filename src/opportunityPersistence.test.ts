@@ -2,6 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { emptyDiscovery, validateDiscovery, type DiscoveryData } from './discovery';
 import { createBusinessRecord, parseBusinessCsv, parseImportedResearch, sameBusiness, validateOpportunityAnalysis } from './opportunityPersistence';
 import { detectOpportunities } from './opportunityDetection';
+import { normalizeHttpUrl, parseQuickImport } from './quickImport';
+
+describe('Quick Import Maps references', () => {
+  it('normalizes a protocol-less Google Maps place URL and suggests its business name', () => {
+    const input = 'google.com/maps/place/Gyani+Ram+Building+Contractor/@28.4493183,77.054293,13z/data=!4m9';
+    const [row] = parseQuickImport(input);
+    expect(row.name).toBe('Gyani Ram Building Contractor');
+    expect(row.location).toBe('');
+    expect(row.sourceUrl).toBe('https://' + input);
+    expect(row.discoverySource).toBe('Google Maps reference (user supplied)');
+  });
+
+  it('accepts a Maps URL with an explicit business name and city', () => {
+    const [row] = parseQuickImport('google.com/maps/place/Gyani+Ram+Building+Contractor | Gyani Ram Building Contractor | Gurugram');
+    expect(row.name).toBe('Gyani Ram Building Contractor');
+    expect(row.location).toBe('Gurugram');
+    expect(row.sourceUrl).toMatch(/^https:\/\/google\.com\/maps\/place\//);
+  });
+
+  it('normalizes Maps links with or without their protocol', () => {
+    expect(normalizeHttpUrl('google.com/maps/place/Example', 'Maps link')).toBe('https://google.com/maps/place/Example');
+    expect(normalizeHttpUrl('https://www.google.com/maps/place/Example', 'Maps link')).toBe('https://www.google.com/maps/place/Example');
+  });
+});
 
 describe('opportunity business persistence', () => {
   it('imports structured research while keeping claims source-linked and hypotheses separate', () => {
