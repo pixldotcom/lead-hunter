@@ -470,3 +470,6 @@ a,.linkbtn{color:var(--brand-orange)}
 .workflow-outreach-studio h3{margin:0 0 4px}
 .workflow-outreach-studio p{overflow-wrap:anywhere}
 @media(max-width:700px){.workflow-outreach-prospect-list{grid-template-columns:1fr}.workflow-outreach-studio{padding:12px}}
+
+/* Forward workflow guidance and the research workbench in its own stage. */
+.workflow-next-step{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--brand-blue) 45%,var(--line));border-radius:12px;background:linear-gradient(110deg,var(--brand-blue-tint),var(--panel))}.workflow-next-step span{color:var(--muted);font-size:.78rem}.research-workbench{display:grid;gap:12px;margin:14px 0;padding:16px;border:1px solid color-mix(in srgb,var(--brand-blue) 50%,var(--line));border-radius:12px;background:var(--panel)}.research-workbench h4{margin:0}.research-workbench>label{display:grid;gap:6px}.research-workbench textarea{width:100%;min-width:0}@media(max-width:640px){.workflow-next-step{align-items:stretch;flex-direction:column}.workflow-next-step button{width:100%}}
