@@ -1,30 +1,93 @@
 import { describe, expect, it } from 'vitest';
-import type { BusinessRecord, OpportunityAnalysis } from './opportunityModel';
-import { buildEvidenceReportHtml, buildWebsiteRebuildPrompt } from './prospectStudio';
+import type { BusinessRecord } from './opportunityModel';
+import { appendCommunication, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, isSafeHttpUrl } from './prospectStudio';
 import { validateBusinessRecord } from './opportunityPersistence';
 
-const business:BusinessRecord={id:'fixture-1',name:'Example <script>alert(1)</script>',category:'Builder',location:'Test City',websiteUrl:'https://example.test',websiteStatus:'unknown',rating:null,reviewCount:null,phone:'',email:'',profiles:[],discoverySource:'manual',sourceUrl:'',discoveredAt:'2026-01-01T00:00:00.000Z',updatedAt:'2026-01-01T00:00:00.000Z'};
-const analysis:OpportunityAnalysis={businessId:business.id,websiteStatus:'unknown',opportunities:[],evidence:[],totalScore:22,reputationScore:0,evidenceConfidence:0,analyzedAt:'2026-01-01T00:00:00.000Z',researchPrompt:''};
+const business: BusinessRecord = {
+  id: 'fixture-1', name: 'Example Dental', category: 'Dentist', location: 'Test City',
+  websiteUrl: 'https://example.test', websiteStatus: 'unknown', rating: null, reviewCount: null,
+  phone: '+1 555 0100', email: 'owner@example.test', profiles: [], discoverySource: 'manual',
+  sourceUrl: '', discoveredAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  contextNotes: 'Family dental clinic; wants a modern mobile site.'
+};
 
-describe('prospect studio helpers',()=>{
- it('builds a rebuild prompt from saved business details and labels its score correctly',()=>{
-  const prompt=buildWebsiteRebuildPrompt(business,analysis);
-  expect(prompt).toContain(business.websiteUrl);
-  expect(prompt).toContain('22/100 (internal opportunity score, not a Lighthouse score)');
-  expect(prompt).toContain('Do not invent Lighthouse');
- });
- it('accepts an additive journey on a legacy business and rejects malformed prototype URLs',()=>{
-  const legacy={...business};
-  expect(validateBusinessRecord(legacy).id).toBe(business.id);
-  const journey={prototype:{url:'https://preview.example.test',platform:'Vercel',completedAt:'2026-11-14',notes:'',improvements:''},promptSnapshots:[],communications:[]};
-  expect(validateBusinessRecord({...legacy,clientJourney:journey}).clientJourney?.prototype.url).toBe(journey.prototype.url);
-  expect(()=>validateBusinessRecord({...legacy,clientJourney:{...journey,prototype:{...journey.prototype,url:'javascript:alert(1)'}}})).toThrow();
- });
- it('renders a printable evidence report without allowing saved text to inject markup',()=>{
-  const html=buildEvidenceReportHtml(business,analysis);
-  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-  expect(html).not.toContain('<script>alert(1)</script>');
-  expect(html).toContain('not a Lighthouse or Core Web Vitals measurement');
-  expect(html).toContain('No evidence was recorded');
- });
+describe('prospect workflow prompts and record validation', () => {
+  it('creates a copyable website context prompt without requiring an audit or JSON round-trip', () => {
+    const prompt = buildWebsiteContextPrompt(business);
+    expect(prompt).toContain('Example Dental');
+    expect(prompt).toContain('Dentist');
+    expect(prompt).toContain('https://example.test');
+    expect(prompt).toContain('Test City');
+    expect(prompt).toContain(business.contextNotes);
+    expect(prompt).toContain('research the business');
+    expect(prompt).toContain('ONE comprehensive master website build prompt');
+    expect(prompt).not.toContain('JSON');
+  });
+
+  it('prepares outreach context from the saved prototype and contact details', () => {
+    const prompt = buildOutreachPrompt({
+      ...business,
+      clientJourney: {
+        prototype: { url: 'https://preview.example.test', platform: 'Vercel', completedAt: '2026-11-14', notes: '', improvements: 'Simpler booking flow', projectReference: 'Dental-Redesign' },
+        promptSnapshots: [], communications: []
+      }
+    });
+    expect(prompt).toContain('https://example.test');
+    expect(prompt).toContain('https://preview.example.test');
+    expect(prompt).toContain('Simpler booking flow');
+    expect(prompt).toContain('owner@example.test');
+    expect(prompt).toContain('not an approved project');
+  });
+
+  it('includes complete sent and reply bodies in follow-up context', () => {
+    const sentBody = 'Hello, I prepared a redesign concept. Please review the full concept here.';
+    const replyBody = 'Thank you. Could you explain how the appointment request works?';
+    const prompt = buildFollowUpPrompt({
+      ...business,
+      pipelineStage: 'contacted',
+      clientJourney: {
+        prototype: { url: 'https://preview.example.test', platform: 'Vercel', completedAt: '', notes: '', improvements: '', projectReference: 'Dental-Redesign' },
+        promptSnapshots: [],
+        communications: [
+          { id: 'sent-1', kind: 'sent', channel: 'email', subject: 'Website concept', message: sentBody, contact: 'owner@example.test', occurredAt: '2026-11-14T10:00:00.000Z', prototypeUrl: 'https://preview.example.test', followUpAt: '', notes: '' },
+          { id: 'reply-1', kind: 'reply', channel: 'email', subject: 'Re: Website concept', message: replyBody, contact: 'owner@example.test', occurredAt: '2026-11-15T10:00:00.000Z', prototypeUrl: 'https://preview.example.test', followUpAt: '', notes: '' }
+        ]
+      }
+    });
+    expect(prompt).toContain(sentBody);
+    expect(prompt).toContain(replyBody);
+    expect(prompt).toContain('2026-11-14T10:00:00.000Z');
+    expect(prompt).toContain('https://preview.example.test');
+    expect(prompt).toContain('contacted');
+  });
+
+  it('preserves legacy records and validates optional prototype data', () => {
+    const legacy = { ...business };
+    expect(validateBusinessRecord(legacy).id).toBe(business.id);
+    const journey = {
+      prototype: { url: 'https://preview.example.test', platform: 'Vercel', completedAt: '2026-11-14', notes: '', improvements: '', projectReference: 'Dental-Redesign' },
+      promptSnapshots: [], communications: []
+    };
+    expect(validateBusinessRecord({ ...legacy, clientJourney: journey }).clientJourney?.prototype.projectReference).toBe('Dental-Redesign');
+    expect(() => validateBusinessRecord({ ...legacy, clientJourney: { ...journey, prototype: { ...journey.prototype, url: 'javascript:alert(1)' } } })).toThrow();
+    expect(() => validateBusinessRecord({ ...legacy, contextNotes: 'x'.repeat(5001) })).toThrow(/5,000/);
+  });
+
+  it('appends full communications without duplicate IDs or silent history trimming', () => {
+    const event = { id: 'sent-1', kind: 'sent' as const, channel: 'email' as const, subject: 'Subject', message: 'Exact full body', contact: 'owner@example.test', occurredAt: '2026-11-14T10:00:00.000Z', prototypeUrl: 'https://preview.example.test', followUpAt: '', notes: '' };
+    const history = [event];
+    expect(appendCommunication(history, event)).toBe(history);
+    const full = Array.from({length: 500}, (_, index) => ({ ...event, id: 'message-' + index }));
+    expect(() => appendCommunication(full, event)).toThrow(/500-entry/);
+    expect(full).toHaveLength(500);
+    expect(full[0].message).toBe('Exact full body');
+  });
+
+  it('accepts only absolute HTTP and HTTPS prototype URLs', () => {
+    expect(isSafeHttpUrl('https://preview.example.test/path')).toBe(true);
+    expect(isSafeHttpUrl('http://localhost:3000')).toBe(true);
+    expect(isSafeHttpUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeHttpUrl('//example.test')).toBe(false);
+    expect(isSafeHttpUrl('https://example.test/with space')).toBe(false);
+  });
 });

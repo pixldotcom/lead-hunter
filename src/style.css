@@ -496,3 +496,18 @@ a,.linkbtn{color:var(--brand-orange)}
 .studio-history li{margin:12px 0;overflow-wrap:anywhere}
 .studio-history pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto}
 @media(max-width:700px){.prospect-studio{padding:12px}.prospect-studio .headbuttons>*{flex:1 1 100%}}
+
+
+/* Lightweight V3 prospect workflow */
+.prospect-studio{gap:18px}
+.prospect-studio h3{margin:0 0 10px}
+.studio-business,.studio-prototype,.studio-outreach{display:grid;gap:12px;padding:16px;border:1px solid var(--line,#30343d);border-radius:10px}
+.studio-business>p,.studio-prototype>p,.studio-outreach>p{margin:0}
+.studio-business>label,.studio-prototype .formgrid label,.studio-outreach .formgrid label{min-width:0}
+.prospect-studio .formgrid textarea{width:100%;resize:vertical}
+.studio-history ol{padding-left:24px}
+.studio-history li{margin:14px 0;overflow-wrap:anywhere}
+.studio-history pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
+.legacy-workflow-tools{margin-top:20px;padding:14px;border:1px solid var(--line,#30343d);border-radius:10px}
+.legacy-workflow-tools>summary{cursor:pointer;font-weight:650}
+@media(max-width:700px){.prospect-studio{gap:12px}.studio-business,.studio-prototype,.studio-outreach{padding:12px}}
