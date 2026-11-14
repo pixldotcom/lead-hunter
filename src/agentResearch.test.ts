@@ -7,5 +7,6 @@ const analysis:OpportunityAnalysis={businessId:'b1',websiteStatus:'unknown',oppo
 describe('portable AI research prompt',()=>{
  it('includes prospect context and explicitly prevents fabricated website claims',()=>{const prompt=buildAgentResearchPrompt(business);expect(prompt).toContain('Example Gym');expect(prompt).toContain('Ludhiana');expect(prompt).toContain('Do not invent reviews');expect(prompt).toContain('facts');expect(prompt).toContain('sourceUrl');});
  it('includes saved unknowns for follow-up research',()=>{const prompt=buildAgentResearchPrompt(business,analysis,'follow_up');expect(prompt).toContain('Find official site');expect(prompt).toContain('remaining unknowns');});
+ it('requires raw JSON and unescaped URL formatting',()=>{const prompt=buildAgentResearchPrompt(business);expect(prompt).toContain('not a quoted or escaped JSON string');expect(prompt).toContain('Never add a backslash at the end of a line');expect(prompt).toContain('Do not add backslashes before URL punctuation');});
  it('keeps outreach in research-only mode',()=>{const prompt=buildAgentResearchPrompt(business,analysis,'outreach');expect(prompt).toContain('Do not contact the business');expect(prompt).toContain('outreach angles');});
 });

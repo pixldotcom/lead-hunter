@@ -27,6 +27,21 @@ describe('opportunity business persistence', () => {
     expect(notes.nextSteps).toEqual(['1. Confirm the entity', '2. Check the official website']);
   });
 
+  it('repairs ChatGPT line continuations and backslashes before URL punctuation', () => {
+    const copied = [
+      '{\\',
+      '&#x20; "summary": "Identity verified",\\',
+      '&#x20; "facts": [{ "claim": "Official contact page", "sourceUrl": "https\\://www\\.example\\.org/contact" }],\\',
+      '&#x20; "hypotheses": [],\\',
+      '&#x20; "unknowns": [],\\',
+      '&#x20; "nextSteps": []',
+      '}',
+    ].join('\n');
+    const notes = parseImportedResearch(copied);
+    expect(notes.summary).toBe('Identity verified');
+    expect(notes.facts[0].sourceUrl).toBe('https://www.example.org/contact');
+  });
+
   it('extracts a JSON object from a ChatGPT explanation and code block', () => {
     const payload = JSON.stringify({ summary: 'Checked sources', facts: [], hypotheses: [], unknowns: [], nextSteps: [] });
     const notes = parseImportedResearch('Here is the requested research:\n```json\n' + payload + '\n```\nYou can verify the linked sources.');

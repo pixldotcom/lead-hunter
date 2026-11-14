@@ -111,14 +111,39 @@ function balancedResearchObjects(value: string): string[] {
   return objects;
 }
 
+function removeResearchLineContinuations(value: string): string {
+  return value.replace(/\\[ \t]*(?:\r\n|\n|\r)[ \t]*/g, '');
+}
+
+function repairInvalidResearchEscapes(value: string): string {
+  let repaired = '';
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    const next = value[index + 1];
+    if (char === '\\' && next !== undefined && !'"\\/bfnrtu'.includes(next)) {
+      repaired += next;
+      index++;
+    } else repaired += char;
+  }
+  return repaired;
+}
+
 function parseResearchPayload(text: string, depth = 0): unknown {
   const trimmed = decodeResearchEntities(text.replace(/^\uFEFF/, '').trim());
   const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
   const base = fenced ? fenced[1].trim() : trimmed;
   const unescaped = base.replace(/\\(["])/g, '$1').replace(/\\u0022/gi, '"');
-  const continued = unescaped.replace(/\\[ \t]*(?:\r\n|\n|\r)[ \t]*/g, '');
+  const baseContinued = removeResearchLineContinuations(base);
+  const continued = removeResearchLineContinuations(unescaped);
+  const repairedEscapes = repairInvalidResearchEscapes(baseContinued);
+  const continuedRepairedEscapes = repairInvalidResearchEscapes(continued);
   const htmlQuotes = base.replace(/&(?:amp;)?quot;/gi, '"').replace(/&(?:amp;)?#(?:x0*22|0*34);/gi, '"');
-  const candidates = [base, unescaped, continued, htmlQuotes, ...balancedResearchObjects(base), ...balancedResearchObjects(unescaped), ...balancedResearchObjects(continued), ...balancedResearchObjects(htmlQuotes)];
+  const candidates = [
+    base, unescaped, baseContinued, continued, repairedEscapes, continuedRepairedEscapes, htmlQuotes,
+    ...balancedResearchObjects(base), ...balancedResearchObjects(unescaped), ...balancedResearchObjects(baseContinued),
+    ...balancedResearchObjects(continued), ...balancedResearchObjects(repairedEscapes),
+    ...balancedResearchObjects(continuedRepairedEscapes), ...balancedResearchObjects(htmlQuotes),
+  ];
   for (const candidate of candidates) {
     try {
       const parsed: unknown = JSON.parse(candidate);

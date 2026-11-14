@@ -18,7 +18,8 @@ export function buildAgentResearchPrompt(business:BusinessRecord,analysis?:Oppor
     'TASK: '+task,
     'BUSINESS CONTEXT (JSON):',JSON.stringify(context,null,2),
     'Use available public sources. Do not invent reviews, traffic, rankings, website ownership, or technical audit findings. Distinguish evidence from hypotheses. If browsing is unavailable, say what could not be checked. Do not contact the business.',
-    'Return ONLY a valid JSON object (no Markdown fences) using exactly these fields:',
+    'Return ONLY the raw JSON object itself, not a quoted or escaped JSON string. Do not add Markdown fences, explanations, or HTML entities such as &#x20;. Use ordinary spaces. Never add a backslash at the end of a line or before JSON property-name quotes. Do not add backslashes before URL punctuation; write normal HTTPS URLs with a colon and two forward slashes. Use JSON escapes only where required inside string values.',
+    'Use exactly these fields:',
     JSON.stringify({summary:'Concise factual summary',facts:[{claim:'Specific verifiable observation',sourceUrl:'https://source.example/path'}],hypotheses:['Unverified potential opportunity'],unknowns:['Question needing verification'],nextSteps:['Practical verification or next action']},null,2),
     'Include source URLs for each fact. Do not include fabricated or placeholder claims. Keep all fields concise. The user will review the results before saving.'
   ].join('\n\n');
