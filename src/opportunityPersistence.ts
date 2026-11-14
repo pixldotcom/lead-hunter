@@ -74,13 +74,64 @@ export function normalizeOpportunityData<T extends { businesses?: BusinessRecord
 
 export type BusinessImportRow = Partial<Pick<BusinessRecord, 'name'|'category'|'location'|'websiteUrl'|'phone'|'email'|'rating'|'reviewCount'|'profiles'|'discoverySource'|'sourceUrl'|'websiteStatus'>> & { name: string };
 
+function decodeResearchEntities(value: string): string {
+  return value
+    .replace(/&(?:amp;)?#(?:x0*20|0*32);/gi, ' ')
+    .replace(/&(?:amp;)?#(?:x0*a|0*10);/gi, '\n')
+    .replace(/&(?:amp;)?#(?:x0*d|0*13);/gi, '\r')
+    .replace(/&(?:amp;)?nbsp;/gi, ' ');
+}
+
+function balancedResearchObjects(value: string): string[] {
+  const objects: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (depth === 0) {
+      if (char !== '{') continue;
+      start = index;
+      depth = 1;
+      inString = false;
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '{') depth++;
+    else if (char === '}' && --depth === 0) objects.push(value.slice(start, index + 1));
+  }
+  return objects;
+}
+
+function parseResearchPayload(text: string, depth = 0): unknown {
+  const trimmed = decodeResearchEntities(text.replace(/^\uFEFF/, '').trim());
+  const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
+  const base = fenced ? fenced[1].trim() : trimmed;
+  const unescaped = base.replace(/\\(["])/g, '$1').replace(/\\u0022/gi, '"');
+  const continued = unescaped.replace(/\\[ \t]*(?:\r\n|\n|\r)[ \t]*/g, '');
+  const htmlQuotes = base.replace(/&(?:amp;)?quot;/gi, '"').replace(/&(?:amp;)?#(?:x0*22|0*34);/gi, '"');
+  const candidates = [base, unescaped, continued, htmlQuotes, ...balancedResearchObjects(base), ...balancedResearchObjects(unescaped), ...balancedResearchObjects(continued), ...balancedResearchObjects(htmlQuotes)];
+  for (const candidate of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      if (typeof parsed === 'string' && depth < 2) return parseResearchPayload(parsed, depth + 1);
+      return parsed;
+    } catch { /* Try the next narrowly normalized or extracted JSON candidate. */ }
+  }
+  throw Error('Research must be valid JSON. Paste the JSON object or code block without changing its quotes.');
+}
+
 export function parseImportedResearch(text: string, now = new Date()): NonNullable<OpportunityAnalysis['researchNotes']> {
   if (!text.trim() || text.length > 20000) throw Error('Paste research JSON under 20 KB.');
-  const trimmed = text.trim();
-  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```\s*$/i.exec(trimmed);
-  const payload = fenced ? fenced[1].trim() : trimmed;
-  let input: unknown;
-  try { input = JSON.parse(payload); } catch { throw Error('Research must be a valid JSON object. Remove any explanation before or after the JSON.'); }
+  const input = parseResearchPayload(text);
   if (!isObject(input)) throw Error('Research must be a JSON object.');
   const list = (key: string, limit: number) => {
     const value = input[key];
