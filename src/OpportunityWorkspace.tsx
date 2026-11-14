@@ -338,6 +338,7 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
     OutreachChannelInput(channel);
     OutreachDraft(prepareOutreach(prospect,channel).message);
     OutreachApproved(false);
+    selectWorkflowStep('outreach');
   };
 
   const changeOutreachChannel = (prospect: ReturnType<typeof buildQualifiedShortlist>[number], channel: OutreachChannel) => {
@@ -563,19 +564,7 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
         {activityByBusiness.get(item.business.id) && <p><strong>Outreach:</strong> {activityByBusiness.get(item.business.id)!.stage} · {followUpStatus(activityByBusiness.get(item.business.id)!) === 'overdue' ? 'Follow-up overdue' : activityByBusiness.get(item.business.id)!.nextFollowUpAt ? 'Follow-up '+activityByBusiness.get(item.business.id)!.nextFollowUpAt.slice(0,10) : 'No follow-up scheduled'}</p>}
         <div className="headbuttons"><button className="secondary" onClick={() => editActivity(item.business.id)}>Track outreach</button>{item.analysis && <button className="secondary" onClick={() => void copyPrompt(item.analysis!.researchPrompt)}>Copy research prompt</button>}<button className="secondary" onClick={() => void copyPrompt(buildProspectBrief(item))}>Copy qualification brief</button><button className="primary" onClick={() => openOutreach(item)}>Prepare outreach</button>{item.business.sourceUrl && <a className="secondary" href={item.business.sourceUrl} target="_blank" rel="noopener noreferrer">Check source</a>}</div>
         {activityBusinessId === item.business.id && <div className="opportunity-notice"><h4>Outreach activity</h4><p className="muted">Record what actually happened. Preparing or copying a draft does not count as contacting a business.</p><div className="formgrid"><label>Stage<select value={activityStage} onChange={e=>ActivityStage(e.target.value as OutreachStage)}>{OUTREACH_STAGES.map(stage=><option key={stage} value={stage}>{stage}</option>)}</select></label><label>Channel<select value={activityChannel} onChange={e=>ActivityChannel(e.target.value as OutreachChannel)}><option value="email">Email</option><option value="phone">Phone</option><option value="contact_form">Contact form</option></select></label><label>Last actual contact<input type="date" value={activityLastContact} onChange={e=>ActivityLastContact(e.target.value)}/></label><label>Next follow-up<input type="date" value={activityNextFollowUp} onChange={e=>ActivityNextFollowUp(e.target.value)}/></label></div><label>Notes<textarea rows={3} maxLength={2000} value={activityNote} onChange={e=>ActivityNote(e.target.value)} placeholder="Outcome, next action, consent or opt-out details"/></label><div className="headbuttons"><button className="primary" disabled={busy} onClick={()=>void saveActivity()}>Save outreach activity</button><button className="secondary" onClick={()=>ActivityBusiness('')}>Cancel</button></div></div>}
-        {outreachBusinessId === item.business.id && (() => {
-          const kit = prepareOutreach(item,outreachChannel);
-          return <div className="opportunity-notice"><h4>Human-reviewed outreach studio</h4><p className="muted">Draft only. Nothing is sent or scheduled. Check the business, sources, contact permission, and local outreach rules before using this text.</p>
-            <label>Channel<select value={outreachChannel} onChange={e => changeOutreachChannel(item,e.target.value as OutreachChannel)}><option value="email">Email</option><option value="phone">Phone call script</option><option value="contact_form">Website contact form</option></select></label>
-            {outreachChannel === 'email' && <p><strong>Subject:</strong> {kit.subject} · <strong>Recipient:</strong> {item.business.email || 'Email not recorded'}</p>}
-            {outreachChannel === 'phone' && <p><strong>Business phone:</strong> {item.business.phone || 'Phone not recorded'}</p>}
-            {kit.sourceUrls.length > 0 && <p><strong>Sources to check:</strong> {kit.sourceUrls.map(url => <a key={url} href={url} target="_blank" rel="noopener noreferrer">{url} </a>)}</p>}
-            {kit.checks.length > 0 && <div role="alert"><strong>Complete before using this draft:</strong><ul>{kit.checks.map(check => <li key={check}>{check}</li>)}</ul></div>}
-            <label>Editable message<textarea rows={11} value={outreachDraft} onChange={e => { OutreachDraft(e.target.value); OutreachApproved(false); }}/></label>
-            <label><input type="checkbox" checked={outreachApproved} onChange={e => OutreachApproved(e.target.checked)}/> I reviewed the facts, verified the contact route, and will follow applicable outreach rules.</label>
-            <div className="headbuttons"><button className="primary" disabled={!kit.eligible || !outreachApproved || !outreachDraft.trim()} onClick={() => void copyPrompt((outreachChannel === 'email' ? `Subject: ${kit.subject}\n\n` : '') + outreachDraft)}>Copy reviewed draft</button><button className="secondary" onClick={() => {OutreachBusiness(''); OutreachApproved(false);}}>Close</button></div>
-          </div>;
-        })()}
+
 
       </article>)}</div>
       {shortlisted.length > 40 && <p className="muted">Showing top 40 of {shortlisted.length} businesses. Filter by qualification stage to narrow the list.</p>}
@@ -588,6 +577,32 @@ export function OpportunityWorkspace({initialView = 'home', onNavigate}: {initia
         <div><strong>{dueActivities.length}</strong><span>Overdue follow-ups</span></div>
       </div>
       <div className="headbuttons"><button type="button" className="secondary" onClick={() => onNavigate?.('Pipeline')}>Open Pipeline</button><button type="button" className="primary" onClick={() => onNavigate?.('Follow-ups')}>Open Follow-ups</button></div>
+      {outreachBusinessId ? (() => {
+        const item = shortlist.find(prospect => prospect.business.id === outreachBusinessId);
+        if (!item) return <p className="muted" role="status">This prospect is no longer in the qualification list. Choose another business to prepare outreach.</p>;
+        const kit = prepareOutreach(item,outreachChannel);
+        return <div className="workflow-outreach-studio" data-outreach-business={item.business.id}>
+          <div className="between"><div><h3>{item.business.name}</h3><p>{[item.business.category,item.business.location].filter(Boolean).join(' · ') || 'Business details'}</p></div><button type="button" className="secondary" onClick={() => {OutreachBusiness('');OutreachApproved(false);}}>Choose another business</button></div>
+          <p><strong>Qualification:</strong> {item.tier} — {item.reason}</p>
+          {item.missing.length > 0 && <p className="muted"><strong>Still verify:</strong> {item.missing.join(' · ')}</p>}
+          <div className="opportunity-notice"><h4>Human-reviewed outreach studio</h4><p className="muted">Draft only. Nothing is sent or scheduled. Check the business, sources, contact permission, and local outreach rules before using this text.</p>
+            <label>Channel<select value={outreachChannel} onChange={e => changeOutreachChannel(item,e.target.value as OutreachChannel)}><option value="email">Email</option><option value="phone">Phone call script</option><option value="contact_form">Website contact form</option></select></label>
+            {outreachChannel === 'email' && <p><strong>Subject:</strong> {kit.subject} · <strong>Recipient:</strong> {item.business.email || 'Email not recorded'}</p>}
+            {outreachChannel === 'phone' && <p><strong>Business phone:</strong> {item.business.phone || 'Phone not recorded'}</p>}
+            {kit.sourceUrls.length > 0 && <p><strong>Sources to check:</strong> {kit.sourceUrls.map(url => <a key={url} href={url} target="_blank" rel="noopener noreferrer">{url} </a>)}</p>}
+            {kit.checks.length > 0 && <div role="alert"><strong>Complete before using this draft:</strong><ul>{kit.checks.map(check => <li key={check}>{check}</li>)}</ul></div>}
+            <label>Editable message<textarea rows={11} value={outreachDraft} onChange={e => { OutreachDraft(e.target.value); OutreachApproved(false); }}/></label>
+            <label><input type="checkbox" checked={outreachApproved} onChange={e => OutreachApproved(e.target.checked)}/> I reviewed the facts, verified the contact route, and will follow applicable outreach rules.</label>
+            <div className="headbuttons"><button className="primary" disabled={!kit.eligible || !outreachApproved || !outreachDraft.trim()} onClick={() => void copyPrompt((outreachChannel === 'email' ? `Subject: ${kit.subject}\n\n` : '') + outreachDraft)}>Copy reviewed draft</button><button type="button" className="secondary" onClick={() => {OutreachBusiness('');OutreachApproved(false);}}>Close</button></div>
+          </div>
+        </div>;
+      })() : shortlist.length ? <div className="workflow-outreach-prospect-list" aria-label="Qualified business opportunities">
+        {shortlist.slice(0,40).map(item => <article className="workflow-outreach-prospect-card" key={item.business.id}>
+          <div><strong>{item.business.name}</strong><p>{[item.business.category,item.business.location].filter(Boolean).join(' · ') || 'Business details not recorded'}</p></div>
+          <p><strong>{item.tier === 'ready' ? 'Ready for review' : item.tier === 'research' ? 'Research next' : item.tier === 'verify' ? 'Verify details' : 'Analyze first'}</strong> — {item.reason}</p>
+          <button type="button" className="primary" onClick={() => openOutreach(item)}>Prepare outreach</button>
+        </article>)}
+      </div> : <p className="muted">Analyze and qualify a business first. Your saved prospect will appear here without re-entry.</p>}
     </section>
     <section id="v2-queue" className="panel v2-view-panel">
       <div className="between"><div><h2>2. Analyze prospects</h2><p>{businesses.length} businesses saved · {analyses.length} analyzed · {businesses.filter(b => b.websiteStatus === 'no_website_found' || b.websiteStatus === 'outdated').length} flagged for website opportunities</p></div><button className="primary" disabled={!businesses.length || (busy && !queueProgress)} onClick={() => busy ? (cancelBatch.current = true) : void analyzeAll()}>{busy ? 'Stop after current business' : `Analyze pending (${businesses.filter(b => !analyses.some(a => a.businessId === b.id)).length})`}</button></div>
