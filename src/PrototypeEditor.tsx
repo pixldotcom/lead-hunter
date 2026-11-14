@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { BusinessRecord, ClientJourney } from './opportunityModel';
-import { buildOutreachPrompt, emptyClientJourney, isSafeHttpUrl } from './prospectStudio';
+import { buildOutreachPrompt, emptyClientJourney, isSafeHttpUrl } from './prospectStudioUtils';
 
 type Props = { business: BusinessRecord; onSave: (prototype: ClientJourney['prototype']) => Promise<void> };
 const protoOf = (business: BusinessRecord) => business.clientJourney?.prototype ?? emptyClientJourney().prototype;

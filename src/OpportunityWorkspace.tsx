@@ -15,7 +15,7 @@ import { prepareOutreach, type OutreachChannel } from './outreachPreparation';
 import { OUTREACH_STAGES, followUpStatus, upsertOutreachActivity, type OutreachActivity, type OutreachStage } from './outreachTracking';
 import { FollowupsPage, PipelinePage, WorkspaceMobileTabs } from './ProspectPages';
 import { businessPipelineStage, pipelineStageForOutreach } from './pipeline';
-import { appendCommunication, buildWebsiteContextPrompt, communicationStage } from './prospectStudio';
+import { appendCommunication, buildWebsiteContextPrompt, communicationStage } from './prospectStudioUtils';
 
 const statusLabels: Record<WebsiteStatus, string> = {
   no_website_found: 'No website found',

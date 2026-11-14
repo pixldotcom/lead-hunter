@@ -1,13 +1,16 @@
 import {describe,expect,it} from 'vitest';
 import {emptyCloud,validateCloud} from './cloudModel';
 import {createBusinessRecord} from './opportunityPersistence';
-import {businessPipelineStage,groupFollowUps,updateBusinessStage,workspaceViewForPage,pipelineStageForOutreach,pipelineStageForPrototype} from './pipeline';
+import {PIPELINE_STAGES,businessPipelineStage,groupFollowUps,updateBusinessStage,workspaceViewForPage,pipelineStageForOutreach,pipelineStageForPrototype} from './pipeline';
 import type {OutreachActivity} from './outreachTracking';
 
 const business=()=>createBusinessRecord({name:'Ludhi Dental',location:'Ludhiana',websiteUrl:'https://ludhi-dental.example'});
 const activity=(businessId:string,stage:OutreachActivity['stage'],nextFollowUpAt:string):OutreachActivity=>({businessId,stage,channel:'email',lastContactAt:'2026-11-12T12:00:00.000Z',nextFollowUpAt,note:'Call about the proposal',updatedAt:'2026-11-12T12:00:00.000Z'});
 
 describe('distinct prospect workspaces',()=>{
+  it('retains all eight existing pipeline stages and stored keys',()=>{
+    expect(PIPELINE_STAGES).toEqual(['new','researching','qualified','ready_to_pitch','contacted','negotiating','won','lost']);
+  });
   it('routes the three navigation destinations to separate views',()=>{
     expect(workspaceViewForPage('Business Opportunities')).toBe('opportunities');
     expect(workspaceViewForPage('Pipeline')).toBe('pipeline');
