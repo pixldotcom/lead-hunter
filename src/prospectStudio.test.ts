@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BusinessRecord } from './opportunityModel';
-import { appendCommunication, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, isSafeHttpUrl } from './prospectStudio';
+import { appendCommunication, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, isSafeHttpUrl, withPrototype } from './prospectStudio';
 import { validateBusinessRecord } from './opportunityPersistence';
 import { mergeImportedBusiness } from './quickImport';
 import { communicationStage } from './prospectStudio';
@@ -37,6 +37,7 @@ describe('prospect workflow prompts and record validation', () => {
     });
     expect(prompt).toContain('https://example.test');
     expect(prompt).toContain('https://preview.example.test');
+    expect(prompt).toContain('Dental-Redesign');
     expect(prompt).toContain('Simpler booking flow');
     expect(prompt).toContain('owner@example.test');
     expect(prompt).toContain('not an approved project');
@@ -106,5 +107,19 @@ describe('prospect workflow prompts and record validation', () => {
     expect(isSafeHttpUrl('javascript:alert(1)')).toBe(false);
     expect(isSafeHttpUrl('//example.test')).toBe(false);
     expect(isSafeHttpUrl('https://example.test/with space')).toBe(false);
+  });
+
+  it('gives a safe outreach instruction when no prototype is available', () => {
+    const prompt=buildOutreachPrompt(business);
+    expect(prompt).toContain('No redesign prototype is available yet');
+    expect(prompt).toContain('https://example.test');
+  });
+
+  it('updates only prototype fields while preserving communication and prompt history',()=>{
+    const history={id:'e1',kind:'sent' as const,channel:'email' as const,subject:'Hello',message:'Sent',contact:'owner',occurredAt:'2026-11-14T00:00:00Z',prototypeUrl:'',followUpAt:'',notes:''};
+    const journey=withPrototype({prototype:{url:'',platform:'',completedAt:'',notes:'',improvements:''},promptSnapshots:[{kind:'outreach',text:'saved prompt',generatedAt:'2026-11-14T00:00:00Z'}],communications:[history]}, {url:'https://preview.example.test',platform:'',completedAt:'',notes:'New design',improvements:'New design',projectReference:'Example-Redesign'});
+    expect(journey.prototype.projectReference).toBe('Example-Redesign');
+    expect(journey.communications).toEqual([history]);
+    expect(journey.promptSnapshots[0].text).toBe('saved prompt');
   });
 });

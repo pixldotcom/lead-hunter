@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import {emptyCloud,validateCloud} from './cloudModel';
 import {createBusinessRecord} from './opportunityPersistence';
-import {businessPipelineStage,groupFollowUps,updateBusinessStage,workspaceViewForPage,pipelineStageForOutreach} from './pipeline';
+import {businessPipelineStage,groupFollowUps,updateBusinessStage,workspaceViewForPage,pipelineStageForOutreach,pipelineStageForPrototype} from './pipeline';
 import type {OutreachActivity} from './outreachTracking';
 
 const business=()=>createBusinessRecord({name:'Ludhi Dental',location:'Ludhiana',websiteUrl:'https://ludhi-dental.example'});
@@ -41,6 +41,13 @@ describe('distinct prospect workspaces',()=>{
     expect(pipelineStageForOutreach('won')).toBe('won');
     expect(pipelineStageForOutreach('closed')).toBe('lost');
     expect(pipelineStageForOutreach('drafted')).toBeUndefined();
+  });
+
+  it('promotes a prototype only from early stages and preserves advanced stages',()=>{
+    expect(pipelineStageForPrototype('new',true)).toBe('ready_to_pitch');
+    expect(pipelineStageForPrototype('qualified',true)).toBe('ready_to_pitch');
+    for(const stage of ['ready_to_pitch','contacted','negotiating','won','lost'] as const) expect(pipelineStageForPrototype(stage,true)).toBeUndefined();
+    expect(pipelineStageForPrototype('new',false)).toBeUndefined();
   });
 
   it('groups due today, overdue, upcoming and completed activity without changing source records',()=>{
