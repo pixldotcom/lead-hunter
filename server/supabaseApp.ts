@@ -3,13 +3,14 @@ import {createHash} from 'node:crypto';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {analyze} from './audit.ts';
 import {AuditError} from './network.ts';
+import {importWebsite} from './websiteImport.ts';
 import {emptyCloud,validateCloud} from '../src/cloudModel.ts';
 import {logServerError} from './diagnostics.ts';
 import type {SupabaseConfig} from './supabaseConfig.ts';
 export {supabaseConfig,type SupabaseConfig} from './supabaseConfig.ts';
 
 type Request=IncomingMessage & {body?:unknown};
-type Deps={client?:(token?:string)=>SupabaseClient;analyzer?:typeof analyze};
+type Deps={client?:(token?:string)=>SupabaseClient;analyzer?:typeof analyze;websiteImporter?:typeof importWebsite};
 export function createSupabaseHandler(config?:SupabaseConfig,deps:Deps={}){
  const client=(token?:string)=>deps.client?.(token)??createClient(config!.url,config!.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{headers:token?{Authorization:`Bearer ${token}`}:{},fetch:(input,init)=>fetch(input,{...init,signal:AbortSignal.any([...(init?.signal?[init.signal]:[]),AbortSignal.timeout(12000)])})}});
  const prefix=config?.secure?'__Host-lh-':'lh-';
@@ -65,7 +66,7 @@ export function createSupabaseHandler(config?:SupabaseConfig,deps:Deps={}){
     return reply(200,{message:'If an account exists for this email, check its inbox for the recovery link.'});
    }
    if(path==='/api/auth/recovery'&&req.method==='POST'){
-    if(limit('login',res))return reply(429,{error:'Too many recovery attempts. Wait and retry.'});
+    if(limit('recovery',res))return reply(429,{error:'Too many recovery attempts. Wait and retry.'});
     if(typeof data.tokenHash!=='string'||!/^[a-f0-9]{32,128}$/i.test(data.tokenHash))return reply(400,{error:'Recovery link is invalid or expired.'});
     const auth=client();const {data:result,error}=await auth.auth.verifyOtp({token_hash:data.tokenHash,type:'recovery'});if(error||!result.session)return reply(401,{error:'Recovery link is invalid or expired.'});if(!isOwner(result.user))return await rejectSession(auth);setSession(res,result.session);return reply(200,{authenticated:true,userId:result.user!.id,expiresAt:Date.now()+result.session.expires_in*1000});
    }
@@ -80,6 +81,18 @@ export function createSupabaseHandler(config?:SupabaseConfig,deps:Deps={}){
     const auth=client();const loaded=await auth.auth.setSession({access_token:access,refresh_token:refresh});if(loaded.error)return reply(401,{error:'Recovery session expired. Request another link.'});const {error}=await auth.auth.updateUser({password:data.password});if(error)return reply(400,{error:'Password could not be updated. Try another password or request a new recovery link.'});return reply(200,{message:'Password updated.'});
    }
    if(path==='/api/health'&&req.method==='GET')return reply(200,{status:'ok'});
+   if(path==='/api/import/website'&&req.method==='POST'){
+    if(typeof data.websiteUrl!=='string'||data.websiteUrl.length>2048)return reply(400,{error:'Enter an official website URL.'});
+    try{return reply(200,await (deps.websiteImporter??importWebsite)(data.websiteUrl,abort.signal))}
+    catch(error){
+     if(error instanceof AuditError){
+      if(error.code==='INCOMPLETE_RESPONSE')return reply(422,{error:'This website stopped the automatic page read before it finished. Page reading is optional; verify details manually.'});
+      if(error.code==='TIMEOUT')return reply(504,{error:'This website took too long to respond. Page reading is optional; verify details manually.'});
+      return reply(422,{error:error.message});
+     }
+     throw error;
+    }
+   }
    if(path==='/api/audit'&&req.method==='POST'){if(typeof data.url!=='string')return reply(400,{error:'Enter a public website URL.'});return reply(200,await (deps.analyzer??analyze)(data.url,abort.signal))}
    if(path==='/api/workspace/backup'&&req.method==='GET'){const result=await client(access).rpc('lh_load_workspace');if(result.error)return reply(result.error.code==='42501'?403:503,{error:'Cloud backup is unavailable. Try again later.'});return reply(200,{...result.data,userId:user.id})}
    if(path==='/api/workspace'&&['GET','POST'].includes(req.method??'')){
