@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { BusinessRecord } from './opportunityModel';
 import { appendCommunication, buildFollowUpPrompt, buildOutreachPrompt, buildWebsiteContextPrompt, isSafeHttpUrl } from './prospectStudio';
 import { validateBusinessRecord } from './opportunityPersistence';
+import { mergeImportedBusiness } from './quickImport';
+import { communicationStage } from './prospectStudio';
+import { pipelineStageForOutreach } from './pipeline';
 
 const business: BusinessRecord = {
   id: 'fixture-1', name: 'Example Dental', category: 'Dentist', location: 'Test City',
@@ -71,6 +74,20 @@ describe('prospect workflow prompts and record validation', () => {
     expect(validateBusinessRecord({ ...legacy, clientJourney: journey }).clientJourney?.prototype.projectReference).toBe('Dental-Redesign');
     expect(() => validateBusinessRecord({ ...legacy, clientJourney: { ...journey, prototype: { ...journey.prototype, url: 'javascript:alert(1)' } } })).toThrow();
     expect(() => validateBusinessRecord({ ...legacy, contextNotes: 'x'.repeat(5001) })).toThrow(/5,000/);
+  });
+
+  it('keeps prototype and communications when a duplicate website import is merged', () => {
+    const existing = { ...business, clientJourney: { prototype: { url: 'https://preview.example.test', platform: 'Vercel', completedAt: '', notes: '', improvements: '', projectReference: 'Saved project' }, promptSnapshots: [], communications: [{ id: 'sent-1', kind: 'sent' as const, channel: 'email' as const, subject: 'Subject', message: 'Full sent body', contact: 'owner@example.test', occurredAt: '2026-11-14T10:00:00.000Z', prototypeUrl: 'https://preview.example.test', followUpAt: '', notes: '' }] } };
+    const merged = mergeImportedBusiness(existing, { ...business, name: 'Example Dental updated', email: '', phone: '' });
+    expect(merged.id).toBe(existing.id);
+    expect(merged.clientJourney?.prototype.projectReference).toBe('Saved project');
+    expect(merged.clientJourney?.communications[0].message).toBe('Full sent body');
+  });
+
+  it('maps real contact activities to existing pipeline stages', () => {
+    expect(communicationStage('sent')).toBe('contacted');
+    expect(pipelineStageForOutreach('replied')).toBe('negotiating');
+    expect(pipelineStageForOutreach('won')).toBe('won');
   });
 
   it('appends full communications without duplicate IDs or silent history trimming', () => {
