@@ -12,7 +12,7 @@ await new Promise(resolve=>probe.listen(0,'127.0.0.1',resolve));
 const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
 const origin=`http://127.0.0.1:${port}`;
 const handler=createSupabaseHandler({origin,url:'https://fixture.supabase.co',key:'sb_publishable_fixture',secure:false,ownerUserId:fixture.users[0].id,ownerEmail:fixture.users[0].email},{client:fixture.client});
-const server=createServer(async(req,res)=>{const path=new URL(req.url??'/',origin).pathname;if(path.startsWith('/api/'))return handler(req,res);const file=resolve(root,'.'+(path==='/'?'/index.html':decodeURIComponent(path)));if(!file.startsWith(root+sep)){res.writeHead(403);res.end();return}try{const data=await readFile(file);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'})[extname(file)]??'application/octet-stream');res.end(data)}catch{res.writeHead(404);res.end()}});
+const server=createServer(async(req,res)=>{const path=new URL(req.url??'/',origin).pathname;if(path==='/api/audit'&&req.method==='POST'){let raw='';for await(const chunk of req)raw+=chunk;const {url}=JSON.parse(raw);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({website:url,submittedUrl:url,status:200,redirects:[],analyzedAt:new Date().toISOString(),htmlVerified:true,title:'Synthetic website audit fixture',description:'Synthetic description',canonical:url,h1Count:1,viewport:true,wordPress:false,wordPressEvidence:'Not detected in synthetic fixture',summary:'Synthetic website audit completed',findings:[]}));return}if(path.startsWith('/api/'))return handler(req,res);const file=resolve(root,'.'+(path==='/'?'/index.html':decodeURIComponent(path)));if(!file.startsWith(root+sep)){res.writeHead(403);res.end();return}try{const data=await readFile(file);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'})[extname(file)]??'application/octet-stream');res.end(data)}catch{res.writeHead(404);res.end()}});
 await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
 let browser;
 try{
@@ -49,8 +49,26 @@ try{
   const imported=await browser.evaluate("fetch('/api/workspace').then(r=>r.json())");
   const business=imported.data.discovery.businesses.find(item=>item.name==='Workspace view fixture');
   assert.ok(business,'Quick Import record must be present in the persisted cloud workspace');
-  await browser.evaluate("document.querySelector('[data-workflow-step=qualify]').click()");
-  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-qualify')");
+  assert.deepEqual(await browser.evaluate("[...document.querySelectorAll('section[id^="v2-"]')].map(section=>section.id)"),['v2-discover','v2-import','v2-queue','v2-qualify','v2-followup'],'all-stages view should follow the forward workflow order');
+  await browser.evaluate("document.querySelector('[data-workflow-step=analyze]').click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-analyze')");
+  assert.equal(await browser.evaluate("document.querySelector('#v2-queue')?.textContent.includes('Import ChatGPT research')"),false,'research import belongs to stage 4, not website audit');
+  await browser.click('Run website audit');
+  await browser.wait("fetch('/api/workspace').then(r=>r.json()).then(r=>r.data.discovery.opportunityAnalyses.some(a=>a.businessId==="+JSON.stringify(business.id)+"&&a.evidence))");
+  const afterAudit=await browser.evaluate("fetch('/api/workspace').then(r=>r.json())");
+  assert.equal(afterAudit.data.discovery.businesses.find(item=>item.name==='Workspace view fixture')?.id,business.id,'website audit must preserve business ID');
+  await browser.evaluate("[...document.querySelectorAll('#v2-queue button')].find(button=>button.textContent.trim()==='Continue to Research & qualify')?.click()");
+  await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-qualify')&&document.querySelector('.research-workbench')");
+  assert.equal(await browser.evaluate("new URLSearchParams(location.search).get('workflow')"),'qualify','continue action should advance the shareable workflow route');
+  assert.ok(await browser.evaluate("document.querySelector('#v2-qualify')?.textContent.includes('Copy qualification brief')"),'qualification brief is available as a copy-only action');
+  await browser.click('Import ChatGPT research');
+  await browser.wait("document.querySelector('.research-workbench textarea:not([readonly])')");
+  await browser.input('.research-workbench textarea:not([readonly])',JSON.stringify({summary:'Synthetic website audit research.',facts:[{claim:'The contact page has no visible telephone number.',sourceUrl:'https://workspace-view-fixture.example/contact'}],hypotheses:[],unknowns:[],nextSteps:['Verify a contact route']}));
+  await browser.click('Save validated research');
+  await browser.wait("fetch('/api/workspace').then(r=>r.json()).then(r=>r.data.discovery.opportunityAnalyses.some(a=>a.businessId==="+JSON.stringify(business.id)+"&&a.researchNotes?.facts?.length===1))");
+  const afterResearch=await browser.evaluate("fetch('/api/workspace').then(r=>r.json())");
+  assert.equal(afterResearch.data.discovery.businesses.find(item=>item.name==='Workspace view fixture')?.id,business.id,'research import must preserve the existing business ID');
+  assert.ok(await browser.evaluate("document.querySelector('#v2-qualify')?.textContent.includes('Imported research · source claims need review')"),'saved research is visible in the research stage');
   await browser.evaluate("[...document.querySelectorAll('#v2-qualify button')].find(button=>button.textContent.trim()==='Prepare outreach')?.click()");
   await browser.wait("document.querySelector('.opportunities-page')?.classList.contains('workflow-focus-outreach')&&document.querySelector('[data-outreach-business]')?.getAttribute('data-outreach-business')==="+JSON.stringify(business.id));
   assert.equal(await browser.evaluate("new URLSearchParams(location.search).get('workflow')"),'outreach','preparing outreach should select and persist the Outreach stage');
@@ -95,5 +113,5 @@ try{
   await browser.send('Page.reload');
   await browser.wait("document.querySelector('.followups-page h1')?.textContent==='Follow-ups'");
   assert.equal(await browser.evaluate('location.hash'),'#/follow-ups','refresh should preserve the selected workspace route');
-  console.log('PASS: focused Business Opportunities stages and browser history; shared outreach navigation; cloud import, stage persistence/reload, and mobile layout. Synthetic Supabase fixture only.');
+  console.log('PASS: focused Business Opportunities stages and browser history; shared outreach navigation; website audit → research JSON import → outreach with stable business ID; cloud stage persistence/reload; and mobile layout. Synthetic Supabase fixture only.');
 }finally{if(browser)await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await fixture.close()}
