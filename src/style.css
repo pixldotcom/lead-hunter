@@ -249,7 +249,7 @@ a,.linkbtn{color:var(--brand-orange)}
 
 
 /* V2 mobile first viewport: remove account/admin chrome from the primary task flow. */
-.mobile-menu-button{display:none}
+.mobile-menu-button,.mobile-nav-backdrop{display:none}
 .cloud-utilities{display:inline-block;vertical-align:middle}
 .cloud-utilities summary{cursor:pointer;font-size:.7rem;padding:6px 9px;border:1px solid var(--line);border-radius:8px;list-style:revert}
 .cloud-utilities-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:10px}
@@ -267,20 +267,28 @@ a,.linkbtn{color:var(--brand-orange)}
  .cloud-status .cloud-utilities-actions button{min-height:44px;flex:1 1 150px}
  .cloud-status-attention{border:1px solid var(--brand-orange);padding:12px}
  .migration-panel{margin:6px 12px;padding:8px}
- .sidebar{display:none;position:relative;inset:auto;width:100%;height:auto;max-height:none;overflow:visible;grid-template-columns:none;padding:8px 12px;gap:6px;border-right:0;border-bottom:1px solid var(--line);z-index:5}
- .sidebar.mobile-menu-open{display:flex;flex-wrap:wrap}
- .sidebar .brand{display:none}
- .sidebar .nav{flex:1 1 130px;width:auto;min-height:44px;white-space:normal;text-align:left;justify-content:flex-start}
- .sidebar .legacy-toggle{flex:1 1 100%;min-height:44px}
- .sidebar .legacy-nav:not(.legacy-open){display:none}
- .sidebar .legacy-nav.legacy-open{display:flex}
+ .shell{--mobile-toolbar-height:56px}
+ .sidebar{display:none;position:fixed;inset:calc(var(--mobile-toolbar-height) + 6px) auto auto max(8px,env(safe-area-inset-left));z-index:8;width:min(360px,calc(100% - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));max-height:calc(100dvh - var(--mobile-toolbar-height) - 14px - env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain;padding:8px;gap:2px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 12px 28px #0007}
+ .sidebar.mobile-menu-open{display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap}
+ .sidebar .brand,.sidebar .version{display:none}
+ .sidebar .nav{flex:none;width:100%;min-height:44px;justify-content:flex-start;padding:8px 12px;font-size:.72rem;line-height:1.3;white-space:normal;border-radius:8px;color:var(--text)}
+ .sidebar .nav>svg{flex:none}
+ .sidebar .nav[aria-current=page]{background:var(--brand-blue-tint);box-shadow:inset 3px 0 var(--brand-blue)}
+ .sidebar .nav em{margin-left:auto}
+ .sidebar .account-session-tools{margin-top:6px}
+ .sidebar .account-session-tools .session-control{padding:6px 4px 0;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}
+ .sidebar .account-session-tools .session-email{padding-left:8px;overflow-wrap:anywhere}
+ .sidebar .account-session-tools .session-control>.secondary{min-height:44px;min-width:0}
+ .sidebar .nav:focus-visible,.workspace-header button:focus-visible{outline:2px solid #9baeff;outline-offset:-2px}
+ .mobile-nav-backdrop{display:block;position:fixed;inset:0;z-index:6;background:#0006}
  main{margin:0;min-width:0}
- header{position:relative;min-height:48px;padding:6px 12px;gap:8px;flex-wrap:nowrap}
- header>span{flex:1;min-width:0;font-size:.68rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
- header>div{flex:0 0 auto;gap:8px;flex-wrap:nowrap}
- header>div>i{display:none}
- header .topavatar{display:none}
- .mobile-menu-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-width:44px;min-height:44px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-size:1rem}
+ .workspace-header{position:sticky;top:0;z-index:7;height:var(--mobile-toolbar-height);min-height:0;padding:0 8px;gap:8px;flex-wrap:nowrap;background:#0d0d0d}
+ .workspace-header .workspace-breadcrumb{flex:1;min-width:0;font-size:.72rem;line-height:1.15;color:var(--text)}
+ .workspace-breadcrumb>span,.workspace-breadcrumb>svg{display:none}
+ .workspace-header>div{flex:0 0 auto;gap:0;flex-wrap:nowrap}
+ .workspace-header>div>i,.workspace-header .topavatar{display:none}
+ .workspace-header button{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:0;border-radius:8px;color:var(--text)}
+ .workspace-header .mobile-menu-button[aria-expanded=true]{background:var(--brand-blue-tint)}
  .content{padding:12px;min-width:0}
  footer{display:none}
  .opportunity-workspace{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
